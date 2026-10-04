@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --panel: #ffffff; --ink: #2f2a26; --muted: #7a7064; --line: #e2dccf;
+    --accent: #d97757; --red: #e5383b; --chip: #f6f2e8; --chip-on: #2f2a26; --chip-on-ink: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1d1b19; --panel: #262320; --ink: #eee7dc; --muted: #a39887; --line: #3a3530;
+      --chip: #312d29; --chip-on: #eee7dc; --chip-on-ink: #1d1b19;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  /* The story takes all the room it can: the page never scrolls, the side panel scrolls on its own. */
+  body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  header { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font: 700 19px/1.2 "Segoe Print", "Comic Sans MS", "Bradley Hand", cursive; margin: 0; flex: 1 1 260px; }
+  .controls { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { font: inherit; font-size: 14px; color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.on, button.primary { background: var(--chip-on); color: var(--chip-on-ink); border-color: var(--chip-on); }
+  button:disabled { opacity: .45; cursor: default; }
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; padding: 12px 16px; }
+  main.focus { grid-template-columns: minmax(0, 1fr); }
+  main.focus aside { display: none; }
+  main > section { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  #stage { flex: 1; min-height: 0; display: flex; flex-direction: column; border-radius: 14px; box-shadow: 0 2px 14px rgba(0,0,0,.12); overflow: hidden; background: #fffdf6; color: #2f2a26; user-select: none; }
+  #art { flex: 1; min-height: 180px; position: relative; }
+  /* Step-by-step captions under the drawing: they appear as the pen reaches each part. */
+  #steps { flex: none; max-height: 42%; overflow-y: auto; padding: 12px 26px 16px; border-top: 1.5px dashed #e2d9c4; font: 15.5px/1.5 "Segoe Print", "Comic Sans MS", "Bradley Hand", cursive; color: #3b332c; user-select: text; }
+  #steps[hidden] { display: none; }
+  #steps ol { margin: 0; padding-left: 26px; columns: 2 340px; column-gap: 34px; }
+  #steps li { margin: 0 0 6px; break-inside: avoid; opacity: 0; animation: stepIn .5s ease forwards; }
+  #steps li::marker { color: #d97757; font-weight: 700; }
+  #steps.static li, #steps.static .points { animation: none; opacity: 1; }
+  #steps .points { margin-top: 10px; padding: 10px 14px; background: #fff5d6; border-radius: 10px; opacity: 0; animation: stepIn .6s ease forwards; }
+  #steps .points b { color: #8a3b1f; }
+  #steps .points ul { margin: 4px 0 0; padding-left: 20px; }
+  @keyframes stepIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  /* What a part does, its file and a bit of its code: opens when a box is picked. */
+  #card { position: absolute; top: 12px; right: 12px; width: min(400px, 62%); max-height: calc(100% - 24px); overflow: auto; background: #fff; color: #2f2a26; border: 1px solid #e2d9c4; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 14px 16px; font-size: 14px; user-select: text; z-index: 3; }
+  #card[hidden] { display: none; }
+  #card.left { right: auto; left: 12px; }
+  #card h3 { margin: 0 26px 4px 0; font: 700 18px/1.25 "Segoe Print", "Comic Sans MS", cursive; }
+  #card .file { font: 12.5px ui-monospace, Consolas, monospace; color: #8a7f6a; margin: 0 0 8px; word-break: break-all; }
+  #card p { margin: 0 0 10px; }
+  #card pre { margin: 0 0 10px; padding: 10px 12px; background: #f6f2e8; border-radius: 8px; font: 12.5px/1.5 ui-monospace, Consolas, monospace; overflow-x: auto; white-space: pre; }
+  #card .x { position: absolute; top: 8px; right: 8px; padding: 2px 9px; background: transparent; border: 0; font-size: 18px; color: #8a7f6a; }
+  #card button { color: #2f2a26; background: #f6f2e8; border-color: #e2d9c4; }
+  #card .row { margin-top: 4px; }
+  #noteForm { position: absolute; z-index: 4; display: none; gap: 6px; padding: 8px; background: #fff; border: 1px solid #e2d9c4; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.18); width: 280px; }
+  #noteForm input { background: #fffdf6; color: #2f2a26; }
+  #svg, #svg svg { display: block; width: 100%; height: 100%; }
+  @media (max-width: 900px) {
+    body { height: auto; overflow: auto; }
+    main, main.focus { grid-template-columns: 1fr; padding: 10px 16px 24px; }
+    #stage { flex: none; height: 62vh; }
+  }
+  #ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
+  #stage.pen #ink { pointer-events: auto; cursor: crosshair; }
+  #stage.picking #art { cursor: pointer; }
+  .dots { flex: none; display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .dots button { font-size: 13px; padding: 4px 10px; }
+  aside { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; padding-right: 2px; }
+  @media (max-width: 900px) { aside { overflow: visible; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+  .tools { display: flex; flex-wrap: wrap; gap: 6px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; min-height: 1.4em; }
+  #noteForm.show { display: flex; }
+  input[type=text], textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
+  textarea { min-height: 84px; resize: vertical; }
+  ul#said { margin: 0 0 10px; padding-left: 18px; font-size: 14px; }
+  ul#said:empty::before { content: "Nothing drawn on this scene yet."; color: var(--muted); margin-left: -18px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  details { margin-top: 10px; font-size: 13px; }
+  details pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 260px; overflow: auto; margin: 8px 0 0; }
+  .small { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+  #subject { font-size: 14px; margin: 0 0 10px; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--chip-on); color: var(--chip-on-ink); padding: 8px 16px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #links { display: flex; gap: 12px; font-size: 14px; }
+  #links a { color: var(--muted); text-decoration: none; }
+  #links a:hover { color: var(--ink); text-decoration: underline; }
+  #learned h3 { font-size: 14px; margin: 0 0 6px; }
+  #learned ul { margin: 0 0 12px; padding-left: 0; list-style: none; }
+  #learned li { padding: 6px 0 6px 24px; position: relative; border-bottom: 1px dashed var(--line); font-size: 14px; }
+  #learned li::before { content: "✓"; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+  label.small { display: block; margin: 0 0 6px; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+  .tabs button { font-size: 13px; padding: 5px 10px; }
+  kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <nav id="links"></nav>
+  <div class="controls">
+    <button id="prev" title="Previous scene (←)">◀ Prev</button>
+    <button id="play" class="primary" title="Play the story (Space)">▶ Play story</button>
+    <button id="replay" title="Replay this scene (R)">↻ Replay</button>
+    <button id="next" title="Next scene (→)">Next ▶</button>
+    <button id="focus" title="Hide or show the side panel (F)">⤢ Focus</button>
+    <button id="saveCopy" title="Download this story with your drawings and notes">Save my copy</button>
+  </div>
+</header>
+<main>
+  <section>
+    <div id="stage">
+      <div id="art">
+        <div id="svg"></div><canvas id="ink"></canvas>
+        <div id="card" hidden></div>
+        <form id="noteForm"><input type="text" id="noteText" maxlength="80" placeholder="Your note…"><button class="primary">Add</button></form>
+      </div>
+      <div id="steps" hidden></div>
+    </div>
+    <div class="dots" id="dots"></div>
+  </section>
+  <aside>
+    <div class="card">
+      <h2>Draw on it</h2>
+      <div class="tools" id="tools"></div>
+      <div class="row">
+        <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
+        <button id="clear">Clear scene</button>
+      </div>
+      <p class="hint" id="hint"></p>
+    </div>
+    <div class="card">
+      <h2>Notebook</h2>
+      <div id="learned"></div>
+      <label class="small" for="journal">My notes on this scene</label>
+      <textarea id="journal" placeholder="What you learned, in your own words…"></textarea>
+      <p class="small" id="savedInfo"></p>
+    </div>
+    <div class="card">
+      <h2>Talk to your agent</h2>
+      <div class="tabs" id="talkModes"></div>
+      <p id="subject"></p>
+      <ul id="said"></ul>
+      <textarea id="q" placeholder="Ask about this scene. Your drawing goes with it."></textarea>
+      <div class="row">
+        <button id="copy" class="primary">Copy message</button>
+        <button id="png">Save picture</button>
+        <button id="zoom" disabled>Zoom in on…</button>
+      </div>
+      <details><summary>Preview the message</summary><pre id="preview"></pre></details>
+      <p class="small">Paste the message into your agent's chat (Claude Code, Codex, Cursor...). You can attach the picture too.</p>
+    </div>
+    <p class="small"><kbd>←</kbd> <kbd>→</kbd> scenes · <kbd>Space</kbd> play · <kbd>R</kbd> replay · <kbd>P</kbd> pen · <kbd>Esc</kbd> stop drawing · <kbd>F</kbd> focus</p>
+  </aside>
+</main>
+<div id="toast"></div>
+<script>
+/*__CORE__*/
+</script>
+<script>
+(() => {
+  const story = parseStory(JSON.stringify(/*__STORY__*/null))
+  if (!story) { document.body.textContent = 'This doodle story could not be read.'; return }
+  const n = story.scenes.length
+  const PAGE = '<!doctype html>\n' + document.documentElement.outerHTML
+  const SOURCE = /*__SOURCE__*/null
+  const KNOWN = /*__KNOWN__*/null || {}
+  const SAVED = /*__SAVED__*/null/*__END_SAVED__*/
+  const KEY = 'doodle:' + story.id
+  const $ = id => document.getElementById(id)
+
+  let i = 0, run = 0, mode = 'none', pending = null, subject = null, playing = false, timer = 0, freshMark = null
+  let marks = [], journal = {}, talk = 'ask'
+  const savedAt = SAVED && SAVED.savedAt
+  try {
+    const src = JSON.parse(localStorage.getItem(KEY) || 'null') || SAVED
+    if (Array.isArray(src)) marks = src
+    else if (src) { marks = src.marks || []; journal = src.journal || {} }
+  } catch {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ marks, journal })) } catch {} }
+  const escText = t => String(t).replace(/[<&]/g, c => (c === '<' ? '&lt;' : '&amp;'))
+  const TALK = [
+    ['ask', 'Ask', 'Ask about this scene. Your drawing goes with it.'],
+    ['check', 'Check my understanding', 'Explain this scene in your own words. Leave it empty to send your notebook notes.'],
+    ['quiz', 'Quiz me', 'Anything the quiz should focus on? (optional)'],
+    ['term', 'Explain a term', "A word or tool you don't know, like API, cron or SQLite. Or pick a box."],
+    ['change', 'Propose a change', 'Describe the change you want. Draw it too: + Add box, ✕ Cross out, arrows or pen lines for new connections.'],
+  ]
+
+  const TOOLS = [
+    ['none', 'Pick'], ['pen', '✎ Pen'], ['circle', '◯ Circle'], ['arrow', '→ Arrow'], ['question', '? Mark'], ['note', '✉ Note'], ['add', '+ Add box'], ['cross', '✕ Cross out'],
+  ]
+  const HINTS = {
+    none: () => 'Click a box to ask about it. Pick a tool to draw.',
+    pen: () => 'Draw anywhere: loop around boxes, draw lines between them, scribble on one.',
+    circle: () => 'Click a box to circle it (click again to erase).',
+    question: () => 'Click a box to put a ? on it (click again to erase).',
+    arrow: () => pending ? 'Now click where the arrow points.' : 'Click where the arrow starts.',
+    note: () => pending ? 'Type your note and press Enter.' : 'Click the box your note is about.',
+    add: () => pending ? 'Name the new part and press Enter.' : 'Click an empty spot where a new part should go.',
+    cross: () => 'Click a box to cross it out (click again to undo).',
+  }
+
+  const scene = () => story.scenes[i]
+  const here = () => marks.filter(m => m.s === i)
+  const name = id => (scene().nodes.find(x => x.id === id) || {}).label || (marks.find(m => m.kind === 'add' && m.id === id && m.s === i) || {}).text || id
+  // Boxes on this scene: the story's parts plus the ones the reader added.
+  function boxes() {
+    const g = geometry(scene())
+    const extra = here().filter(m => m.kind === 'add' && m.id).map(m => addedBox(m, g.W, g.H))
+    return { g, extra, all: [...g.nodes, ...extra] }
+  }
+
+  // ---- drawing ----
+  function draw(animate) {
+    const list = here()
+    const svg = renderScene(scene(), { index: i, total: n, run, animate, marks: list, fresh: freshMark ? list.indexOf(freshMark) : -1 })
+    $('svg').innerHTML = svg
+    const el = $('svg').querySelector('svg')
+    el.removeAttribute('width'); el.removeAttribute('height')
+    try { el.setCurrentTime(0) } catch {}
+    freshMark = null
+    renderSteps(animate)
+    sizeInk()
+    ui()
+  }
+
+  function renderSteps(animate) {
+    const sc = scene()
+    const tl = timeline(sc)
+    const items = []
+    sc.nodes.forEach((nd, k) => { if (nd.step) items.push({ t: tl.nodes[k].t, text: nd.step }) })
+    sc.edges.forEach((e, k) => { if (e.step) items.push({ t: tl.edges[k].t, text: e.step }) })
+    items.sort((a, b) => a.t - b.t)
+    const host = $('steps')
+    host.innerHTML = ''
+    host.className = animate ? '' : 'static'
+    host.hidden = !items.length && !sc.points.length
+    if (items.length) {
+      const ol = document.createElement('ol')
+      for (const it of items) {
+        const li = document.createElement('li')
+        li.textContent = it.text
+        li.style.animationDelay = `${it.t}s`
+        ol.append(li)
+      }
+      host.append(ol)
+    }
+    if (sc.points.length) {
+      const box = document.createElement('div')
+      box.className = 'points'
+      box.style.animationDelay = `${tl.end + 0.3}s`
+      box.innerHTML = '<b>Remember</b><ul>' + sc.points.map(x => `<li>${escText(x)}</li>`).join('') + '</ul>'
+      host.append(box)
+    }
+  }
+
+  // ---- what a part does ----
+  function openCard(id, side) {
+    const nd = scene().nodes.find(x => x.id === id)
+    const card = $('card')
+    if (!nd) { card.hidden = true; return }
+    const bits = [`<button class="x" title="Close">×</button><h3>${escText(nd.label)}</h3>`]
+    if (nd.file || nd.note) bits.push(`<p class="file">${escText(nd.file || nd.note)}</p>`)
+    if (nd.details) bits.push(`<p>${escText(nd.details)}</p>`)
+    if (nd.code) bits.push(`<pre>${escText(nd.code)}</pre>`)
+    if (!nd.details && !nd.code) bits.push('<p>No details for this part yet. Ask your agent about it.</p>')
+    bits.push('<div class="row"><button data-act="ask">Ask about this</button><button data-act="term">What is this?</button>' + (nd.zoom && KNOWN[nd.zoom] ? `<button data-act="open">Open deeper story</button>` : '<button data-act="zoom">Ask for a deeper story</button>') + '</div>')
+    card.innerHTML = bits.join('')
+    card.hidden = false
+    card.className = side === 'left' ? 'left' : ''
+    card.querySelector('.x').onclick = () => { card.hidden = true; subject = null; ui() }
+    card.querySelectorAll('[data-act]').forEach(b => (b.onclick = () => {
+      if (b.dataset.act === 'open') location.href = `${nd.zoom}.html`
+      else if (b.dataset.act === 'zoom') $('zoom').click()
+      else {
+        talk = b.dataset.act === 'term' ? 'term' : 'ask'
+        document.querySelector('main').classList.remove('focus')
+        $('focus').classList.remove('on')
+        ui()
+        $('q').focus()
+      }
+    }))
+  }
+
+  function ui() {
+    $('title').textContent = story.title
+    $('prev').disabled = i === 0
+    $('next').disabled = i === n - 1
+    $('play').textContent = playing ? '❚❚ Pause' : '▶ Play story'
+    for (const b of ['prev', 'play', 'next']) $(b).style.display = n > 1 ? '' : 'none'
+    $('dots').innerHTML = ''
+    if (n > 1) story.scenes.forEach((s, k) => {
+      const b = document.createElement('button')
+      b.textContent = `${k + 1}. ${s.title}`
+      if (k === i) b.className = 'on'
+      b.onclick = () => go(k)
+      $('dots').append(b)
+    })
+    $('tools').innerHTML = ''
+    for (const [m, label] of TOOLS) {
+      const b = document.createElement('button')
+      b.textContent = label
+      if (mode === m) b.className = 'on'
+      b.onclick = () => setMode(m)
+      $('tools').append(b)
+    }
+    $('hint').textContent = HINTS[mode]()
+    $('stage').className = mode === 'pen' ? 'pen' : 'picking'
+    $('noteForm').className = (mode === 'note' || mode === 'add') && pending ? 'show' : ''
+    $('subject').textContent = subject ? `Asking about: ${name(subject)}` : ''
+    $('said').innerHTML = ''
+    for (const line of drawn()) {
+      const li = document.createElement('li')
+      li.textContent = line
+      $('said').append(li)
+    }
+    $('links').innerHTML = ''
+    const link = (href, text) => { const a = document.createElement('a'); a.href = href; a.textContent = text; $('links').append(a) }
+    if (story.up && KNOWN[story.up]) link(`${story.up}.html`, `↑ ${KNOWN[story.up].title}`)
+    for (const [id, v] of Object.entries(KNOWN)) if (v.up === story.id && v.kind === 'concept') link(`${id}.html`, `What is ${v.term || v.title}?`)
+    if (SOURCE) link('index.html', 'Library')
+    const notes = scene().notes || []
+    $('learned').innerHTML = notes.length
+      ? '<h3>What we figured out</h3><ul>' + notes.map(x => `<li>${escText(x)}</li>`).join('') + '</ul>'
+      : '<p class="small" style="margin:0 0 12px">Nothing recorded for this scene yet. What you and your agent settle in the talk lands here.</p>'
+    $('savedInfo').textContent = savedAt ? `This copy was saved ${new Date(savedAt).toLocaleString()}.` : ''
+    $('talkModes').innerHTML = ''
+    for (const [m, label, ph] of TALK) {
+      const b = document.createElement('button')
+      b.textContent = label
+      if (talk === m) { b.className = 'on'; $('q').placeholder = ph }
+      b.onclick = () => { talk = m; ui() }
+      $('talkModes').append(b)
+    }
+    $('copy').textContent = { quiz: 'Copy quiz request', check: 'Copy for checking', change: 'Copy change prompt', term: 'Copy explain request' }[talk] || 'Copy message'
+    const nd = subject && scene().nodes.find(x => x.id === subject)
+    $('zoom').disabled = !nd
+    $('zoom').textContent = !nd ? 'Zoom in on…' : nd.zoom && KNOWN[nd.zoom] ? `Open deeper story: ${KNOWN[nd.zoom].title}` : `Ask for a deeper story on ${nd.label}`
+    $('preview').textContent = message()
+  }
+
+  function go(k, animate = true) {
+    i = Math.max(0, Math.min(n - 1, k))
+    $('journal').value = journal[i] || ''
+    run++
+    pending = null
+    if (subject && !scene().nodes.some(x => x.id === subject)) subject = null
+    $('card').hidden = true
+    draw(animate)
+  }
+
+  function setMode(m) {
+    mode = mode === m && m !== 'none' ? 'none' : m
+    pending = null
+    ui()
+    if (mode === 'note') $('noteText').value = ''
+  }
+
+  function addMark(m) {
+    marks.push(m)
+    freshMark = m
+    save()
+    draw(false)
+  }
+
+  // ---- play ----
+  const sceneMs = sc => {
+    const steps = sc.nodes.filter(x => x.step).length + sc.edges.filter(x => x.step).length
+    return (timeline(sc).end + 2.2 + steps * 0.6 + sc.points.length * 0.8) * 1000
+  }
+  function schedule() {
+    clearTimeout(timer)
+    if (!playing) return
+    timer = setTimeout(() => {
+      if (i >= n - 1) { playing = false; ui(); return }
+      go(i + 1)
+      schedule()
+    }, sceneMs(scene()) + 1500)
+  }
+  function togglePlay() {
+    playing = !playing
+    if (playing) go(i >= n - 1 ? 0 : i)
+    else ui()
+    schedule()
+  }
+
+  // ---- pointer → scene coordinates ----
+  function toScene(ev) {
+    const el = $('svg').querySelector('svg')
+    const r = el.getBoundingClientRect()
+    const [, , W, H] = el.getAttribute('viewBox').split(' ').map(Number)
+    const k = Math.min(r.width / W, r.height / H)
+    const ox = (r.width - W * k) / 2
+    const oy = (r.height - H * k) / 2
+    return { x: (ev.clientX - r.left - ox) / k, y: (ev.clientY - r.top - oy) / k, W, H, r }
+  }
+  function nodeAt(p) {
+    return boxes().all.find(nd => Math.abs(p.x - nd.x) <= nd.hw && Math.abs(p.y - nd.y) <= nd.hh)
+  }
+  // The story's connection closest to a point (a straight line between the two boxes is close enough).
+  function edgeAt(p) {
+    const g = geometry(scene())
+    const at = id => g.nodes.find(x => x.id === id)
+    let best = null, bd = 18
+    for (const e of scene().edges) {
+      const a = at(e.from), b = at(e.to)
+      const dx = b.x - a.x, dy = b.y - a.y
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)))
+      const d = Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t))
+      if (d < bd) { bd = d; best = e }
+    }
+    return best
+  }
+
+  // the small "name it" box opens where the reader clicked
+  function popForm(ev, placeholder) {
+    const r = $('art').getBoundingClientRect()
+    const f = $('noteForm')
+    f.style.left = `${Math.max(8, Math.min(r.width - 290, ev.clientX - r.left - 140))}px`
+    f.style.top = `${Math.max(8, Math.min(r.height - 60, ev.clientY - r.top + 14))}px`
+    $('noteText').placeholder = placeholder
+    $('noteText').value = ''
+    setTimeout(() => $('noteText').focus(), 0)
+  }
+
+  $('art').addEventListener('click', ev => {
+    if (mode === 'pen' || ev.target.closest('#card, #noteForm')) return
+    const p = toScene(ev)
+    if (mode === 'add') {
+      pending = { x: Math.round((p.x / p.W) * 1000) / 1000, y: Math.round((p.y / p.H) * 1000) / 1000 }
+      ui()
+      popForm(ev, 'Name of the new part…')
+      return
+    }
+    const hit = nodeAt(p)
+    if (!hit && mode === 'cross') {
+      const e = edgeAt(p)
+      if (!e) return
+      const at = marks.findIndex(m => m.s === i && m.kind === 'cross' && m.a === e.from && m.b === e.to)
+      if (at >= 0) { marks.splice(at, 1); save(); draw(false) } else addMark({ s: i, kind: 'cross', a: e.from, b: e.to })
+      return
+    }
+    if (!hit) { if (mode === 'none') { $('card').hidden = true; subject = null; ui() } return }
+    const id = hit.id
+    if (mode === 'none') {
+      subject = subject === id ? null : id
+      if (subject && scene().nodes.some(x => x.id === id)) openCard(id, p.x > p.W / 2 ? 'left' : 'right')
+      else $('card').hidden = true
+      ui()
+      return
+    }
+    if (mode === 'circle' || mode === 'question' || mode === 'cross') {
+      const at = marks.findIndex(m => m.s === i && m.kind === mode && m.a === id && m.b === undefined)
+      if (at >= 0) { marks.splice(at, 1); save(); draw(false) } else addMark({ s: i, kind: mode, a: id })
+      return
+    }
+    if (mode === 'arrow') {
+      if (!pending) { pending = id; ui(); return }
+      if (pending === id) { pending = null; ui(); return }
+      const from = pending
+      pending = null
+      addMark({ s: i, kind: 'arrow', a: from, b: id })
+      return
+    }
+    if (mode === 'note') { pending = id; ui(); popForm(ev, 'Your note…') }
+  })
+
+  $('noteForm').addEventListener('submit', ev => {
+    ev.preventDefault()
+    const text = $('noteText').value.trim()
+    if (pending && text && mode === 'add') {
+      const k = marks.reduce((mx, m) => (m.kind === 'add' && m.id ? Math.max(mx, Number(m.id.slice(4)) || 0) : mx), 0) + 1
+      addMark({ s: i, kind: 'add', id: `new-${k}`, a: '', x: pending.x, y: pending.y, text })
+    }
+    else if (pending && text) addMark({ s: i, kind: 'note', a: pending, text })
+    pending = null
+    $('noteText').value = ''
+    ui()
+  })
+
+  // ---- freehand pen ----
+  const ink = $('ink')
+  const ctx = ink.getContext('2d')
+  let stroke = null
+  function sizeInk() {
+    const r = $('art').getBoundingClientRect()
+    const dpr = window.devicePixelRatio || 1
+    ink.width = Math.round(r.width * dpr)
+    ink.height = Math.round(r.height * dpr)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  }
+  ink.addEventListener('pointerdown', ev => {
+    if (mode !== 'pen' || ev.button !== 0) return
+    ink.setPointerCapture(ev.pointerId)
+    const p = toScene(ev)
+    stroke = { pts: [[p.x / p.W, p.y / p.H]], last: [ev.offsetX, ev.offsetY] }
+    ctx.strokeStyle = '#e5383b'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+    ctx.beginPath(); ctx.moveTo(ev.offsetX, ev.offsetY); ctx.lineTo(ev.offsetX + 0.1, ev.offsetY); ctx.stroke()
+  })
+  ink.addEventListener('pointermove', ev => {
+    if (!stroke) return
+    const p = toScene(ev)
+    const [lx, ly] = stroke.last
+    if (Math.abs(lx - ev.offsetX) + Math.abs(ly - ev.offsetY) < 2) return
+    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(ev.offsetX, ev.offsetY); ctx.stroke()
+    stroke.last = [ev.offsetX, ev.offsetY]
+    if (stroke.pts.length < 800) stroke.pts.push([Math.max(0, Math.min(1, p.x / p.W)), Math.max(0, Math.min(1, p.y / p.H))])
+  })
+  const endStroke = () => {
+    if (!stroke) return
+    const flat = stroke.pts.flatMap(([x, y]) => [Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000])
+    stroke = null
+    ctx.clearRect(0, 0, ink.width, ink.height)
+    const reading = interpret(scene(), flat, boxes().extra)
+    addMark({ s: i, kind: 'free', a: reading.hits[0] || '', b: reading.hits[1], pts: flat, shape: reading.shape, hits: reading.hits })
+  }
+  ink.addEventListener('pointerup', endStroke)
+  ink.addEventListener('pointercancel', endStroke)
+  window.addEventListener('resize', sizeInk)
+
+  // ---- words for what was drawn ----
+  // The boxes closest to a spot the person picked, to say where a new part goes.
+  function near(m) {
+    const g = geometry(scene())
+    const x = m.x * g.W, y = m.y * g.H
+    const close = g.nodes
+      .map(nd => ({ nd, d: Math.hypot(nd.x - x, nd.y - y) }))
+      .sort((a, b) => a.d - b.d)
+      .filter((o, k) => k === 0 || o.d < 260)
+      .slice(0, 2)
+    return close.map(o => `"${o.nd.label}"`).join(' and ')
+  }
+
+  // The drawing read as design edits, for "Propose a change".
+  function edits() {
+    const list = ids => (ids || []).map(id => `"${name(id)}"`).join(', ')
+    return here().map(m => {
+      switch (m.kind) {
+        case 'cross': return m.b ? `REMOVE the connection "${name(m.a)}" → "${name(m.b)}"` : `REMOVE "${name(m.a)}" (or take this job away from it)`
+        case 'add': return `ADD a new part "${m.text}"${near(m) ? `, placed near ${near(m)}` : ''}`
+        case 'arrow': return `CONNECT "${name(m.a)}" → "${name(m.b)}"`
+        case 'note': return `ON "${name(m.a)}": ${m.text}`
+        case 'circle': return `FOCUS on "${name(m.a)}"`
+        case 'question': return `NOT SURE about "${name(m.a)}"`
+        default:
+          if (m.shape === 'line' && m.hits && m.hits.length === 2) return `CONNECT "${name(m.hits[0])}" → "${name(m.hits[1])}" (drawn as a line, in this direction)`
+          if (m.shape === 'loop' && m.hits && m.hits.length) return `GROUP / FOCUS on ${list(m.hits)}`
+          return m.hits && m.hits.length ? `MARKED ${list(m.hits)}` : null
+      }
+    }).filter(Boolean)
+  }
+
+  function drawn() {
+    return here().map(m => {
+      const list = ids => (ids || []).map(id => `"${name(id)}"`).join(', ')
+      switch (m.kind) {
+        case 'circle': return `I circled "${name(m.a)}".`
+        case 'question': return `I put a "?" on "${name(m.a)}".`
+        case 'arrow': return `I drew an arrow from "${name(m.a)}" to "${name(m.b)}".`
+        case 'note': return `I wrote "${m.text}" next to "${name(m.a)}".`
+        case 'cross': return m.b ? `I crossed out the arrow "${name(m.a)}" → "${name(m.b)}".` : `I crossed out "${name(m.a)}".`
+        case 'add': return `I added a new part "${m.text}"${near(m) ? ` near ${near(m)}` : ''}.`
+        default:
+          if (m.shape === 'loop') return m.hits && m.hits.length ? `I drew a loop around ${list(m.hits)}.` : 'I drew a loop in an empty spot.'
+          if (m.shape === 'line') return `I drew a line from "${name(m.hits[0])}" to "${name(m.hits[1])}".`
+          return m.hits && m.hits.length ? `I scribbled on ${list(m.hits)}.` : 'I scribbled in an empty spot.'
+      }
+    })
+  }
+
+  // "I don't know what X is": ask for a small concept story that ends inside this one.
+  function termMessage(q) {
+    const sc = scene()
+    const term = q || (subject ? name(subject) : '')
+    if (!term) return 'Type a word or tool you do not know (or pick a box), then copy the request.'
+    const id = `${story.id}-${slug(term)}`
+    return [
+      `[doodle] I don't know what "${term}" is. It comes up in your doodle story "${story.title}", scene ${i + 1} of ${n}: "${sc.title}"${SOURCE ? ` (story file: ${SOURCE})` : ''}.`,
+      `That scene has: ${sc.nodes.map(x => x.label).join(', ')}.`,
+      '',
+      `Please make a short concept story with the founds-doodle skill:`,
+      `1. Explain "${term}" from zero, in plain words, with an everyday comparison (1-3 scenes, style "simple" or "normal").`,
+      `2. End with a scene "How ${term} fits in our story" that uses the real parts from this scene and shows exactly where "${term}" sits between them.`,
+      SOURCE
+        ? `3. Save it next to the story file as id "${id}" with "kind": "concept", "term": "${term}", "up": "${story.id}", rebuild, and give me one line on what to look at first.`
+        : '3. Draw it, then give me one line on what to look at first.',
+    ].join('\n')
+  }
+
+  function changeMessage(q, mine) {
+    const sc = scene()
+    const ed = edits()
+    const lines = [
+      `[doodle] Change request on your doodle story "${story.title}", scene ${i + 1} of ${n}: "${sc.title}"${SOURCE ? ` (story file: ${SOURCE})` : ''}.`,
+      'Use what we have already discussed in this chat and the code you have read; read more only where you need to.',
+      '',
+      `The scene today: ${sc.edges.map(e => `${name(e.from)} → ${name(e.to)}${e.label ? ` (${e.label})` : ''}`).join('; ') || sc.nodes.map(x => x.label).join(', ')}.`,
+      '',
+      ed.length ? 'My edits, drawn on the doodle:' : 'I have not drawn the change yet; here is what I want:',
+      ...ed.map((x, k) => `${k + 1}. ${x}`),
+    ]
+    if (subject) lines.push('', `Mainly about "${name(subject)}".`)
+    if (q) lines.push('', `What I want: ${q}`)
+    if (mine) lines.push('', `My notes: ${mine}`)
+    lines.push('', 'Please map each edit to the code, then show me the plan (the files to change, risks, anything I missed) and wait for my OK. After I agree, make the change, then update this story to the new flow and add a note on what changed and why.')
+    return lines.join('\n')
+  }
+
+  function message() {
+    const sc = scene()
+    const lines = [
+      `[doodle] About your doodle story "${story.title}", scene ${i + 1} of ${n}: "${sc.title}".`,
+      `The scene shows: ${sc.nodes.map(x => x.label + (x.note ? ` (${x.note})` : '')).join(', ')}.`,
+      `Connections: ${sc.edges.map(e => `${name(e.from)} → ${name(e.to)}${e.label ? ` (${e.label})` : ''}`).join('; ') || 'none'}.`,
+    ]
+    if (sc.caption) lines.push(`Narration: "${sc.caption}"`)
+    const d = drawn()
+    if (d.length) lines.push('', 'What I drew on it:', ...d.map(x => `- ${x}`))
+    if (subject) lines.push('', `I'm asking about "${name(subject)}".`)
+    const q = $('q').value.trim()
+    const mine = (journal[i] || '').trim()
+    if (talk === 'check') {
+      lines.push('', 'Here is how I understand this scene, in my own words:', q || mine || '(Nothing written yet: ask me to explain it to you first.)')
+      lines.push('', 'Please check it: say what is right, correct what is wrong, and fill in what I missed. Point at the parts by name.')
+    } else if (talk === 'change') {
+      return changeMessage(q, mine)
+    } else if (talk === 'term') {
+      return termMessage(q)
+    } else if (talk === 'quiz') {
+      lines.push('', `Quiz me on this scene${q ? ` (focus: ${q})` : ''}: ask me 3 short questions, one at a time, and wait for each answer. You can ask me to draw an answer on the doodle. Tell me what I got right and what I got wrong.`)
+    } else {
+      lines.push('', q ? `My question: ${q}` : 'What do you think? Am I reading this right?')
+      if (mine) lines.push('', `My notes so far: ${mine}`)
+    }
+    lines.push('', SOURCE
+      ? `When we settle something, add it as a short line to scene ${i + 1}'s "notes" in ${SOURCE} and rebuild the page with the founds-doodle script, so I can review it later.`
+      : 'Answer from the code in plain words.')
+    return lines.join('\n')
+  }
+
+  // ---- talking back ----
+  function toast(t) {
+    $('toast').textContent = t
+    $('toast').classList.add('show')
+    setTimeout(() => $('toast').classList.remove('show'), 1800)
+  }
+  async function copy(text) {
+    try { await navigator.clipboard.writeText(text) } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text; document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove()
+    }
+    toast("Copied. Paste it into your agent's chat.")
+  }
+  function download(blob, file) {
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = file
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+  }
+  $('copy').onclick = () => copy(message())
+  $('saveCopy').onclick = () => {
+    const json = JSON.stringify({ marks, journal, savedAt: Date.now() }).replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--')
+    const html = PAGE.replace(/\/\*__SAVED__\*\/[\s\S]*?\/\*__END_SAVED__\*\//, () => '/*__SAVED__*/' + json + '/*__END_SAVED__*/')
+    download(new Blob([html], { type: 'text/html' }), `${story.id}-my-copy.html`)
+    toast('Saved: one HTML file with your drawings and notes.')
+  }
+  $('journal').addEventListener('input', () => {
+    journal[i] = $('journal').value
+    save()
+    $('preview').textContent = message()
+  })
+  $('zoom').onclick = () => {
+    const nd = subject && scene().nodes.find(x => x.id === subject)
+    if (!nd) return
+    if (nd.zoom && KNOWN[nd.zoom]) { location.href = `${nd.zoom}.html`; return }
+    const id = `${story.id}-${slug(nd.label)}`
+    copy(`[doodle] Zoom in please: use the founds-doodle skill to tell a deeper story about "${nd.label}"${nd.note ? ` (${nd.note})` : ''}, from your story "${story.title}" (scene ${i + 1}, "${scene().title}"). Read its code first.` +
+      (SOURCE ? ` Save it next to ${SOURCE} with id "${id}" and "up": "${story.id}", and set "zoom": "${id}" on node "${nd.id}" in scene ${i + 1} of this story, so the two link up.` : ''))
+  }
+  $('q').addEventListener('input', () => { $('preview').textContent = message() })
+  $('png').onclick = () => {
+    const svg = renderScene(scene(), { index: i, total: n, run, animate: false, marks: here(), fresh: -1 })
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = img.width * 2; c.height = img.height * 2
+      const g = c.getContext('2d'); g.scale(2, 2); g.drawImage(img, 0, 0)
+      c.toBlob(b => {
+        download(b, `${story.id}-scene-${i + 1}.png`)
+        toast('Picture saved. Attach it in your chat if you like.')
+      })
+    }
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+  }
+
+  // ---- buttons and keys ----
+  const toggleFocus = () => {
+    document.querySelector('main').classList.toggle('focus')
+    $('focus').classList.toggle('on')
+    requestAnimationFrame(sizeInk)
+  }
+  $('focus').onclick = toggleFocus
+  $('prev').onclick = () => go(i - 1)
+  $('next').onclick = () => go(i + 1)
+  $('play').onclick = togglePlay
+  $('replay').onclick = () => go(i)
+  $('undo').onclick = () => {
+    const k = marks.map(m => m.s).lastIndexOf(i)
+    if (k >= 0) { marks.splice(k, 1); save(); draw(false) }
+  }
+  $('clear').onclick = () => { marks = marks.filter(m => m.s !== i); save(); draw(false) }
+  document.addEventListener('keydown', ev => {
+    if (ev.target.closest('input, textarea')) return
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === 'z') { ev.preventDefault(); $('undo').click(); return }
+    if (ev.key === 'ArrowRight') go(i + 1)
+    else if (ev.key === 'ArrowLeft') go(i - 1)
+    else if (ev.key === ' ' && !ev.target.closest('button')) { ev.preventDefault(); togglePlay() }
+    else if (ev.key === 'r' || ev.key === 'R') go(i)
+    else if (ev.key === 'p' || ev.key === 'P') setMode('pen')
+    else if (ev.key === 'Escape') setMode('none')
+    else if (ev.key === 'f' || ev.key === 'F') toggleFocus()
+  })
+
+  // #scene=3 opens a scene directly, #focus opens without the side panel: handy for sharing a link.
+  const hp = new URLSearchParams(location.hash.slice(1))
+  if (hp.get('scene')) i = Math.max(0, Math.min(n - 1, Number(hp.get('scene')) - 1 || 0))
+  if (hp.has('focus')) { document.querySelector('main').classList.add('focus'); $('focus').classList.add('on') }
+  if (TALK.some(t => t[0] === hp.get('talk'))) talk = hp.get('talk')
+  $('journal').value = journal[i] || ''
+  draw(true)
+  // #card=<part id> opens that part's card, #preview opens the message preview
+  if (hp.get('card') && scene().nodes.some(x => x.id === hp.get('card'))) {
+    subject = hp.get('card')
+    const at = geometry(scene()).nodes.find(x => x.id === subject)
+    openCard(subject, at && at.x > geometry(scene()).W / 2 ? 'left' : 'right')
+    ui()
+  }
+  if (hp.has('preview')) document.querySelector('details').open = true
+})()
+</script>
+</body>
+</html>

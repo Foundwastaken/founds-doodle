@@ -1,0 +1,4 @@
+interface:
+  display_name: "Founds Doodle"
+  short_description: "A doodle way of learning: your code as an animated storybook you can draw on"
+  default_prompt: "Use $founds-doodle to tell the story of how this codebase works."

@@ -1,0 +1,174 @@
+{
+  "id": "snip",
+  "title": "The Tale of a Tiny Link",
+  "style": "normal",
+  "scenes": [
+    {
+      "title": "Meet the cast",
+      "narration": "Snip turns long web addresses into tiny ones. Our hero is one long link that is about to become snip.dev/Ab3x9Qz. First, meet the places it will visit.",
+      "layout": "flow",
+      "zones": [
+        { "label": "Browser", "nodes": ["you", "form"] },
+        { "label": "API server", "nodes": ["server"] },
+        { "label": "Data", "nodes": ["redis", "pg"] }
+      ],
+      "nodes": [
+        { "id": "you", "label": "You", "shape": "person", "col": 0, "row": 0, "step": "You have a long link to share and not much room to share it." },
+        {
+          "id": "form", "label": "web/Shorten.tsx", "shape": "laptop", "note": "the paste box", "col": 1, "row": 0,
+          "file": "web/Shorten.tsx",
+          "step": "You paste it into the Shorten box and press the button.",
+          "details": "A small React form. It sends the long URL to the API and shows the short link that comes back, with a copy button."
+        },
+        {
+          "id": "server", "label": "src/server.ts", "shape": "server", "note": "the front desk", "col": 2, "row": 0, "zoom": "snip-make-code",
+          "file": "src/server.ts, src/routes/links.ts",
+          "step": "The API server is the front desk: it makes short links and sends visitors on their way.",
+          "details": "An Express app with two routes that matter: POST /links makes a short link, GET /:code redirects a visitor. A rate limiter sits in front of both.",
+          "code": "app.use(rateLimit({ windowMs: 60_000, max: 30 }))\napp.post('/links', createLink)\napp.get('/:code', followLink)"
+        },
+        {
+          "id": "redis", "label": "Redis", "shape": "db", "note": "the quick memory", "col": 3, "row": 0,
+          "file": "src/lib/cache.ts",
+          "step": "Redis is the quick memory: it remembers popular links so most visits never touch the database.",
+          "details": "Keys look like link:Ab3x9Qz and hold the long URL, kept for 24 hours. Also holds a list of clicks waiting to be counted."
+        },
+        {
+          "id": "pg", "label": "Postgres", "shape": "db", "note": "the record book", "col": 3, "row": 1,
+          "file": "src/db/links.ts",
+          "step": "Postgres is the record book: every link ever made, and how often it was clicked.",
+          "details": "One table, links(code, url, created_at, clicks). code is the primary key, so two links can never share a code."
+        }
+      ],
+      "edges": [
+        { "from": "you", "to": "form", "label": "pastes" },
+        { "from": "form", "to": "server", "label": "POST /links" },
+        { "from": "server", "to": "redis", "label": "asks first" },
+        { "from": "server", "to": "pg", "label": "stores" }
+      ],
+      "points": ["Fast path: Redis. Source of truth: Postgres. If they ever disagree, Postgres wins."],
+      "notes": []
+    },
+    {
+      "title": "Making a short link",
+      "narration": "Our long link knocks on the front desk. Before it gets a short name, two guards check it over.",
+      "layout": "flow",
+      "nodes": [
+        { "id": "post", "label": "POST /links", "shape": "doc", "col": 0, "row": 0, "file": "src/routes/links.ts", "step": "The request arrives with the long URL in its body." },
+        {
+          "id": "limit", "label": "rateLimit()", "shape": "diamond", "col": 1, "row": 0, "file": "src/middleware/rateLimit.ts",
+          "step": "Guard 1, the rate limiter: more than 30 requests a minute from one address? Come back later.",
+          "details": "Counts requests per IP in Redis with a one-minute window, so it works even with several server instances."
+        },
+        {
+          "id": "valid", "label": "isValidUrl()", "shape": "diamond", "col": 2, "row": 0, "file": "src/lib/url.ts",
+          "step": "Guard 2 checks it is a real http or https address, and not a link to Snip itself.",
+          "code": "const u = new URL(raw)\nif (!['http:', 'https:'].includes(u.protocol)) return false\nif (u.hostname === 'snip.dev') return false   // no loops\nreturn true"
+        },
+        {
+          "id": "code", "label": "makeCode()", "shape": "gear", "col": 3, "row": 0, "file": "src/lib/code.ts", "zoom": "snip-make-code",
+          "step": "makeCode() invents a short name: 7 random letters and digits, like Ab3x9Qz.",
+          "details": "62 possible characters in 7 places is about 3.5 trillion names, so a clash is rare. When one happens, the database refuses it and makeCode() simply tries again."
+        },
+        { "id": "save", "label": "insertLink()", "shape": "db", "col": 4, "row": 0, "file": "src/db/links.ts", "step": "insertLink() writes code and URL into Postgres." },
+        { "id": "ok", "label": "201 + short link", "shape": "star", "col": 5, "row": 0, "step": "201 Created: the form shows snip.dev/Ab3x9Qz with a copy button. Our hero has its new name." },
+        { "id": "429", "label": "429 slow down", "shape": "note", "col": 1, "row": 1, "step": "Too many requests: a 429 answer, and the form asks you to wait a minute." },
+        { "id": "400", "label": "400 bad URL", "shape": "note", "col": 2, "row": 1, "step": "Not a real web address: a 400 answer explaining why." }
+      ],
+      "edges": [
+        { "from": "post", "to": "limit" },
+        { "from": "limit", "to": "valid", "label": "ok" },
+        { "from": "valid", "to": "code", "label": "valid" },
+        { "from": "code", "to": "save", "label": "Ab3x9Qz" },
+        { "from": "save", "to": "ok", "label": "saved" },
+        { "from": "limit", "to": "429", "label": "too many" },
+        { "from": "valid", "to": "400", "label": "invalid" }
+      ],
+      "points": [
+        "Both guards run before any database write, so junk never reaches Postgres.",
+        "A code clash is not an error you see: makeCode() just rolls again."
+      ],
+      "notes": []
+    },
+    {
+      "title": "Following a short link",
+      "narration": "Days later, a friend clicks snip.dev/Ab3x9Qz. This is the busy part of Snip, so it is built to be fast.",
+      "layout": "flow",
+      "nodes": [
+        { "id": "get", "label": "GET /Ab3x9Qz", "shape": "person", "col": 0, "row": 0, "file": "src/routes/links.ts: followLink()", "step": "A friend clicks the short link." },
+        {
+          "id": "hit", "label": "in Redis?", "shape": "diamond", "col": 1, "row": 0, "file": "src/lib/cache.ts",
+          "step": "First question: does the quick memory already know this code?",
+          "code": "const cached = await redis.get(`link:${code}`)\nif (cached) return res.redirect(302, cached)"
+        },
+        { "id": "go", "label": "302 redirect", "shape": "star", "col": 2, "row": 0, "step": "Cache hit: a 302 redirect sends the browser on to the long URL. No database needed." },
+        {
+          "id": "pg", "label": "findLink()", "shape": "db", "col": 1, "row": 1, "file": "src/db/links.ts",
+          "step": "Cache miss: ask the record book, Postgres."
+        },
+        {
+          "id": "fill", "label": "cache it", "shape": "gear", "col": 2, "row": 1, "file": "src/lib/cache.ts",
+          "step": "Found: copy it into Redis for 24 hours, so the next click is quick, then redirect.",
+          "code": "await redis.set(`link:${code}`, link.url, 'EX', 60 * 60 * 24)"
+        },
+        { "id": "404", "label": "404 page", "shape": "note", "col": 1, "row": 2, "step": "Not in Postgres either: a friendly 404 page." },
+        { "id": "click", "label": "count click", "shape": "doc", "col": 3, "row": 0, "step": "Either way, the click is dropped into a waiting list in Redis to be counted later." }
+      ],
+      "edges": [
+        { "from": "get", "to": "hit" },
+        { "from": "hit", "to": "go", "label": "yes" },
+        { "from": "hit", "to": "pg", "label": "no" },
+        { "from": "pg", "to": "fill", "label": "found" },
+        { "from": "fill", "to": "go", "label": "then" },
+        { "from": "pg", "to": "404", "label": "missing" },
+        { "from": "go", "to": "click", "label": "logs" }
+      ],
+      "points": [
+        "Most clicks end at Redis: the database only sees the first click after a link drops out of the cache.",
+        "Counting a click never slows the redirect: it is only written to a list."
+      ],
+      "notes": []
+    },
+    {
+      "title": "Counting clicks",
+      "narration": "Writing to the database on every click would be slow. So a small night-shift worker counts them in batches.",
+      "layout": "cycle",
+      "nodes": [
+        { "id": "list", "label": "clicks list", "shape": "doc", "file": "Redis key clicks:pending", "step": "Clicks pile up in a Redis list: just a code per click." },
+        {
+          "id": "job", "label": "jobs/clicks.ts", "shape": "gear", "file": "src/jobs/clicks.ts",
+          "step": "Every 10 seconds the click job wakes up and takes up to 1,000 of them.",
+          "code": "setInterval(async () => {\n  const codes = await redis.lpop('clicks:pending', 1000)\n  if (codes?.length) await addClicks(countBy(codes))\n}, 10_000)"
+        },
+        { "id": "pg", "label": "Postgres", "shape": "db", "step": "It adds them up per code and writes one UPDATE per link, not one per click." },
+        { "id": "dash", "label": "Stats page", "shape": "laptop", "file": "web/Stats.tsx", "step": "The stats page reads the totals, a few seconds behind real time, and nobody minds." }
+      ],
+      "edges": [
+        { "from": "list", "to": "job", "label": "pops" },
+        { "from": "job", "to": "pg", "label": "adds up" },
+        { "from": "pg", "to": "dash", "label": "shows" },
+        { "from": "dash", "to": "list", "label": "more clicks" }
+      ],
+      "points": ["Gotcha: if the server stops mid-batch, those clicks are lost. Fine for stats, not for money."],
+      "notes": []
+    },
+    {
+      "title": "Where to start reading",
+      "narration": "Now you know the story. Read the code in the order our link travelled.",
+      "layout": "flow",
+      "nodes": [
+        { "id": "r1", "label": "src/server.ts", "shape": "doc", "step": "src/server.ts: the routes and the rate limiter, in 30 lines." },
+        { "id": "r2", "label": "routes/links.ts", "shape": "doc", "step": "src/routes/links.ts: createLink() and followLink(), the two journeys." },
+        { "id": "r3", "label": "lib/cache.ts", "shape": "doc", "step": "src/lib/cache.ts: the Redis side." },
+        { "id": "r4", "label": "jobs/clicks.ts", "shape": "doc", "step": "src/jobs/clicks.ts: the click counter." }
+      ],
+      "edges": [
+        { "from": "r1", "to": "r2", "label": "then" },
+        { "from": "r2", "to": "r3", "label": "then" },
+        { "from": "r3", "to": "r4", "label": "then" }
+      ],
+      "points": ["Gotcha: deleting a link in Postgres leaves it working for up to 24 hours until its Redis copy expires."],
+      "notes": []
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "id": "snip-make-code",
+  "up": "snip",
+  "title": "Inside makeCode()",
+  "style": "rich",
+  "scenes": [
+    {
+      "title": "Rolling a new name",
+      "narration": "Zooming in on the name maker. It is only a few lines, but it has to promise one thing: no two links ever share a name.",
+      "layout": "flow",
+      "nodes": [
+        {
+          "id": "roll", "label": "randomCode(7)", "shape": "gear", "col": 0, "row": 0, "file": "src/lib/code.ts",
+          "step": "Pick 7 characters from 62 (a-z, A-Z, 0-9) using a secure random source.",
+          "code": "const ABC = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'\nconst bytes = crypto.getRandomValues(new Uint8Array(7))\nreturn [...bytes].map(b => ABC[b % 62]).join('')"
+        },
+        { "id": "ins", "label": "INSERT", "shape": "db", "col": 1, "row": 0, "file": "src/db/links.ts", "step": "Try to save it. The code column is the primary key." },
+        { "id": "taken", "label": "unique error?", "shape": "diamond", "col": 2, "row": 0, "step": "Did Postgres say the code is already taken (error 23505)?" },
+        { "id": "done", "label": "Ab3x9Qz", "shape": "star", "col": 3, "row": 0, "step": "No: the name is ours." },
+        { "id": "again", "label": "try again (max 5)", "shape": "round", "col": 1, "row": 1, "step": "Yes: roll a fresh name and try again, up to 5 times." },
+        { "id": "fail", "label": "500 error", "shape": "note", "col": 2, "row": 1, "step": "Five clashes in a row would mean something is very wrong: give up with a 500." }
+      ],
+      "edges": [
+        { "from": "roll", "to": "ins" },
+        { "from": "ins", "to": "taken" },
+        { "from": "taken", "to": "done", "label": "no" },
+        { "from": "taken", "to": "again", "label": "yes" },
+        { "from": "again", "to": "roll", "label": "re-roll" },
+        { "from": "again", "to": "fail", "label": "5th time" }
+      ],
+      "points": [
+        "The database is the judge of 'unique', not the code: two servers rolling at the same moment cannot both win.",
+        "b % 62 is very slightly uneven (256 is not a multiple of 62). Harmless for short links, not for passwords."
+      ],
+      "notes": []
+    }
+  ]
+}

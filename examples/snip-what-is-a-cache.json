@@ -1,0 +1,47 @@
+{
+  "id": "snip-what-is-a-cache",
+  "kind": "concept",
+  "term": "a cache",
+  "up": "snip",
+  "title": "What is a cache?",
+  "style": "simple",
+  "scenes": [
+    {
+      "title": "A cache is a sticky note",
+      "narration": "You look up a phone number in a thick book. The second time, you just read the sticky note you left on the fridge.",
+      "layout": "flow",
+      "nodes": [
+        { "id": "you", "label": "You", "shape": "person", "step": "You need a number, often." },
+        { "id": "note", "label": "Sticky note", "shape": "note", "step": "First you check the sticky note on the fridge. Quick!" },
+        { "id": "book", "label": "Phone book", "shape": "db", "step": "Not there? Look it up in the big phone book. Slow, but always right." },
+        { "id": "write", "label": "Write it down", "shape": "doc", "step": "Then write it on the sticky note, so next time is quick." }
+      ],
+      "edges": [
+        { "from": "you", "to": "note", "label": "checks" },
+        { "from": "note", "to": "book", "label": "not there" },
+        { "from": "book", "to": "write", "label": "found" }
+      ],
+      "points": ["A cache is a small, fast copy of things you asked for recently. It can be out of date, so it forgets after a while."]
+    },
+    {
+      "title": "How a cache fits in our story",
+      "narration": "In Snip, Redis is the sticky note and Postgres is the phone book.",
+      "layout": "flow",
+      "nodes": [
+        { "id": "click", "label": "GET /Ab3x9Qz", "shape": "person", "col": 0, "row": 0, "step": "A friend clicks the short link." },
+        { "id": "redis", "label": "Redis", "shape": "db", "col": 1, "row": 0, "step": "Redis is checked first: the sticky note." },
+        { "id": "go", "label": "302 redirect", "shape": "star", "col": 2, "row": 0, "step": "Found there: off they go, without touching the database." },
+        { "id": "pg", "label": "Postgres", "shape": "db", "col": 1, "row": 1, "step": "Not there: Postgres, the phone book, has every link." },
+        { "id": "set", "label": "cache for 24h", "shape": "gear", "col": 2, "row": 1, "step": "Snip writes it on the sticky note for 24 hours, then redirects." }
+      ],
+      "edges": [
+        { "from": "click", "to": "redis" },
+        { "from": "redis", "to": "go", "label": "hit" },
+        { "from": "redis", "to": "pg", "label": "miss" },
+        { "from": "pg", "to": "set" },
+        { "from": "set", "to": "go" }
+      ],
+      "points": ["That 24-hour sticky note is why a deleted link can keep working for a day."]
+    }
+  ]
+}
