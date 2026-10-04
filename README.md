@@ -80,6 +80,10 @@ Every story lives in `.doodle/` in your project with an `index.html` library. De
 
 ![The library](docs/8-library.png)
 
+## Look and feel
+
+A sketchbook on a desk: the story is a sheet of paper taped down, the tools are an inked rail beside it, scenes are a numbered track, and Notes and Talk slide in only when you open them. The ☾ button switches between **light and dark** (it starts from your system setting and remembers your choice). Keyboard: `←` `→` scenes, `Space` play, `R` replay, `P` pen, `N` notes, `T` talk.
+
 ## Any depth
 
 | Level | Ask for | You get |
@@ -107,6 +111,7 @@ What you and the agent settle shows up under **What we figured out** in the scen
 When your agent can keep a command running (Claude Code can, in the background), it starts a small local server and the page gets a **Send to agent** button:
 
 - you press **Send to agent**, and your message, drawing included, goes straight to the agent;
+- the page answers what it can **right away** from the story itself (ask "what does Redis do?" and you instantly get the story's own explanation of Redis), and shows **"your agent is working on it"** until the full answer arrives;
 - the agent answers in your chat **and** in a chat thread on the page;
 - when the agent updates the story (a correction, a note you agreed on), the page reloads by itself and keeps your drawings and notes.
 

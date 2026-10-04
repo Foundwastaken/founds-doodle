@@ -16,9 +16,8 @@
     --sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace;
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --desk: #191c21; --panel: #22262d; --ink: #e8eaed; --muted: #9aa1ad; --line: #333944; --soft: #2a2f37; --pen: #6d93f2; --pen-ink: #0f1420; }
-  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --desk: #191c21; --panel: #22262d; --ink: #e8eaed; --muted: #9aa1ad; --line: #333944; --soft: #2a2f37; --pen: #6d93f2; --pen-ink: #0f1420; } }
+  :root[data-theme="dark"] { --desk: #191c21; --panel: #22262d; --ink: #e8eaed; --muted: #9aa1ad; --line: #333944; --soft: #2a2f37; --pen: #6d93f2; --pen-ink: #0f1420; }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--desk); color: var(--ink); font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
   body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -201,7 +200,8 @@
     --wob3: 30px 8px 24px 10px / 8px 26px 10px 30px;
     --stroke: #23262c; --cast: rgba(35, 38, 44, .9);
   }
-  @media (prefers-color-scheme: dark) { :root { --stroke: #c9ced8; --cast: rgba(0, 0, 0, .55); } }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --stroke: #c9ced8; --cast: rgba(0, 0, 0, .55); } }
+  :root[data-theme="dark"] { --stroke: #c9ced8; --cast: rgba(0, 0, 0, .55); }
   body { background-color: var(--desk); background-image: radial-gradient(color-mix(in srgb, var(--ink) 14%, transparent) 1px, transparent 1.4px); background-size: 22px 22px; }
   h1 { font-size: 26px; }
   .bar button, .tabs button, #dots button, #moreMenu button, #moreMenu a, .actions-row button, #quiz button, #card button, #noteForm button, .sheet h2, .sheet h3, #sceneName, #hint, #toast, #links { font-family: var(--hand); }
@@ -244,6 +244,13 @@
   .msg { border-radius: var(--wob3); }
   .msg.you { background: color-mix(in srgb, var(--hl) 22%, var(--panel)); }
   .msg.agent { box-shadow: none; border: 2px solid color-mix(in srgb, var(--ink) 22%, transparent); }
+  .msg.thinking { color: var(--muted); font-family: var(--hand); }
+  .msg.story { border-style: dashed; background: color-mix(in srgb, var(--hl) 14%, var(--panel)); }
+  .dots3 i { font-style: normal; animation: blink 1.2s infinite both; }
+  .dots3 i:nth-child(2) { animation-delay: .2s; }
+  .dots3 i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .15; } 40% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .dots3 i { animation: none; } }
   .actions-row button:not(.primary) { text-decoration: underline wavy color-mix(in srgb, var(--pen) 50%, transparent); text-underline-offset: 4px; }
   #hint { background: var(--hl); color: #23262c; border: 2px solid #23262c; border-radius: var(--wob1); box-shadow: 2px 2px 0 rgba(35,38,44,.85); font-size: 14px; }
   #toast { background: var(--hl); color: #23262c; border: 2px solid #23262c; border-radius: var(--wob1); box-shadow: 3px 3px 0 rgba(35,38,44,.85); }
@@ -289,6 +296,7 @@
     <button id="quizBtn" title="Test yourself on the whole story">Quiz</button>
     <button id="notesBtn" title="Your notes on this scene (N)">Notes</button>
     <button id="talkBtn" title="Talk to your agent (T)">Talk</button>
+    <button id="themeBtn" class="icon" title="Light or dark" aria-label="Switch between light and dark"><svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
     <div class="more">
       <button id="moreBtn" class="icon" aria-label="More" title="More"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg></button>
       <div id="moreMenu" hidden>
@@ -360,6 +368,29 @@
   const story = parseStory(JSON.stringify(/*__STORY__*/null))
   if (!story) { document.body.textContent = 'This doodle story could not be read.'; return }
   const n = story.scenes.length
+  // light or dark: the reader's choice wins over the system's, and is remembered
+  const THEME_KEY = 'doodle-theme'
+  let theme = ''
+  try { theme = localStorage.getItem(THEME_KEY) || '' } catch {}
+  const asked = new URLSearchParams(location.hash.slice(1)).get('theme')
+  if (asked === 'light' || asked === 'dark') theme = asked
+  const applyTheme = () => {
+    if (theme) document.documentElement.dataset.theme = theme
+    else delete document.documentElement.dataset.theme
+    const dark = theme ? theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+    const btn = document.getElementById('themeBtn')
+    btn.innerHTML = dark
+      ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>'
+    btn.title = dark ? 'Switch to light' : 'Switch to dark'
+  }
+  applyTheme()
+  document.getElementById('themeBtn').onclick = () => {
+    const dark = theme ? theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+    theme = dark ? 'light' : 'dark'
+    try { localStorage.setItem(THEME_KEY, theme) } catch {}
+    applyTheme()
+  }
   const PAGE = '<!doctype html>\n' + document.documentElement.outerHTML
   const SOURCE = /*__SOURCE__*/null
   const KNOWN = /*__KNOWN__*/null || {}
@@ -378,7 +409,7 @@
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ marks, journal })) } catch {} }
   const escText = t => String(t).replace(/[<&]/g, c => (c === '<' ? '&lt;' : '&amp;'))
   // live mode: the page was opened from `doodle.mjs serve`, so it can talk to the agent directly
-  let live = false, listening = false, pendingNew = null
+  let live = false, listening = false, working = false, waitingCount = 0, pendingNew = null
   let thread = []
   const TALK = [
     ['ask', 'Ask', 'Ask about this scene. Your drawing goes with it.'],
@@ -775,10 +806,15 @@
       b.onclick = () => { talk = m; ui() }
       $('talkModes').append(b)
     }
-    $('live').className = live ? (listening ? 'on' : 'wait') : ''
-    $('live').textContent = !live ? '' : listening
-      ? '● Live: your agent is listening.'
-      : '○ Live: your agent picks messages up when it next listens.'
+    $('live').className = live ? (working || listening ? 'on' : 'wait') : ''
+    $('live').textContent = !live ? '' : working
+      ? '✎ Your agent is working on your message…'
+      : listening
+        ? '● Live: your agent is listening. Send away.'
+        : waitingCount
+          ? '○ Sent. Your agent will pick it up as soon as it checks in.'
+          : '○ Live: your agent checks in when it is ready for your next message.'
+    $('thread').classList.toggle('working', live && working)
     $('sendLive').hidden = !live
     $('copy').className = live ? '' : 'primary'
     $('copy').textContent = { quiz: 'Copy quiz request', check: 'Copy for checking', change: 'Copy change prompt', term: 'Copy explain request' }[talk] || 'Copy message'
@@ -1145,8 +1181,15 @@
     host.innerHTML = ''
     for (const it of thread.slice(-40)) {
       const d = document.createElement('div')
-      d.className = 'msg ' + (it.from === 'agent' ? 'agent' : 'you')
-      d.innerHTML = `<b>${it.from === 'agent' ? 'Agent' : 'You'}${it.scene ? ` · scene ${it.scene}` : ''}</b>${escText(it.display || it.text)}`
+      d.className = 'msg ' + (it.from === 'agent' ? 'agent' : it.from === 'story' ? 'agent story' : 'you')
+      const who = it.from === 'agent' ? 'Agent' : it.from === 'story' ? 'From the story, right away' : 'You'
+      d.innerHTML = `<b>${who}${it.scene ? `, scene ${it.scene}` : ''}</b>${escText(it.display || it.text)}`
+      host.append(d)
+    }
+    if (live && working) {
+      const d = document.createElement('div')
+      d.className = 'msg agent thinking'
+      d.innerHTML = '<b>Agent</b>Working on it<span class="dots3"><i>.</i><i>.</i><i>.</i></span>'
       host.append(d)
     }
     host.scrollTop = host.scrollHeight
@@ -1160,7 +1203,8 @@
         body: JSON.stringify({ story: story.id, scene: i + 1, text, display }),
       })
       const d = await r.json()
-      toast(d.delivered ? 'Sent. Your agent is on it.' : 'Sent. Your agent will pick it up when it listens.')
+      working = !!d.delivered
+      toast(d.delivered ? 'Sent. Your agent is on it.' : 'Sent. Your agent picks it up as soon as it checks in.')
       $('q').value = ''
       ui()
     } catch {
@@ -1173,13 +1217,37 @@
     const marks = drawn().length
     return `${label}${q ? `: ${q}` : ''}${marks ? `\n(${marks} mark${marks === 1 ? '' : 's'} on the scene)` : ''}`
   }
-  $('sendLive').onclick = () => deliver(message(), shortAsk())
+  // An instant first answer from the story itself, while the agent writes the full one:
+  // any part the question names that the story already explains.
+  function quickAnswer() {
+    const q = ($('q').value + ' ' + (subject ? name(subject) : '')).toLowerCase()
+    if (q.trim().length < 3) return null
+    const words = q.split(/[^a-z0-9_./:-]+/).filter(w => w.length > 2)
+    for (const [si, sc] of story.scenes.entries()) {
+      for (const nd of sc.nodes) {
+        const label = nd.label.toLowerCase()
+        const base = label.replace(/\(\)$/, '').split('/').pop().replace(/\.[a-z]+$/, '')
+        const hit = q.includes(label) || (base.length > 3 && words.some(w => w === base || (w.length > 4 && base.startsWith(w))))
+        const text = nd.details || nd.step
+        if (hit && text) return { from: 'story', story: story.id, scene: si + 1, display: `${nd.label}: ${text}`, text: '' }
+      }
+    }
+    return null
+  }
+  $('sendLive').onclick = () => {
+    const quick = live && (talk === 'ask' || talk === 'term') ? quickAnswer() : null
+    deliver(message(), shortAsk())
+    if (quick) setTimeout(() => { thread.push(quick); renderThread() }, 400)
+  }
   async function connect() {
     if (!location.protocol.startsWith('http')) return
     try {
       const r = await fetch('/api/ping')
       if (!r.ok) return
-      listening = (await r.json()).listening
+      const st = await r.json()
+      listening = st.listening
+      working = !!st.working
+      waitingCount = st.waiting || 0
       live = true
     } catch {
       return
@@ -1188,7 +1256,14 @@
     renderThread()
     ui()
     const es = new EventSource('/api/events')
-    es.addEventListener('status', e => { listening = JSON.parse(e.data).listening; ui() })
+    es.addEventListener('status', e => {
+      const st = JSON.parse(e.data)
+      listening = st.listening
+      working = !!st.working
+      waitingCount = st.waiting || 0
+      ui()
+      renderThread()
+    })
     es.addEventListener('thread', e => {
       const it = JSON.parse(e.data)
       if (it.story && it.story !== story.id) return

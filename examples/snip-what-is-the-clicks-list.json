@@ -1,0 +1,66 @@
+{
+  "id": "snip-what-is-the-clicks-list",
+  "kind": "concept",
+  "term": "the clicks list",
+  "up": "snip",
+  "title": "What is the clicks list?",
+  "style": "simple",
+  "scenes": [
+    {
+      "title": "A basket of tickets",
+      "narration": "A busy museum does not write every visitor in the big book the moment they walk in. The guard drops a ticket in a basket, and once in a while someone counts the basket.",
+      "layout": "flow",
+      "nodes": [
+        { "id": "visitor", "label": "Visitor", "shape": "person", "step": "A visitor walks in. That has to be quick: there is a queue behind them." },
+        { "id": "basket", "label": "Ticket basket", "shape": "doc", "step": "The guard just drops a ticket in the basket. No writing, no waiting." },
+        { "id": "counter", "label": "The counter", "shape": "gear", "step": "Every few minutes someone empties the basket and counts the tickets." },
+        { "id": "book", "label": "The big book", "shape": "db", "step": "They write one line in the big book: 120 visitors. One line, not 120." }
+      ],
+      "edges": [
+        { "from": "visitor", "to": "basket", "label": "drops ticket" },
+        { "from": "basket", "to": "counter", "label": "emptied" },
+        { "from": "counter", "to": "book", "label": "writes total" }
+      ],
+      "points": ["The basket is a waiting line of small things to count later. Adding to it is instant; counting happens in bulk."],
+      "quiz": [
+        { "q": "Why doesn't the guard write each visitor in the big book right away?", "choices": ["It would slow the queue at the door", "The book is full", "Visitors don't want to be counted"], "answer": 0, "why": "Writing is slow; dropping a ticket is instant. The slow part is done later, in bulk." }
+      ]
+    },
+    {
+      "title": "How the clicks list fits in our story",
+      "narration": "In Snip, the basket is a Redis list called clicks:pending, the counter is jobs/clicks.ts, and the big book is Postgres.",
+      "layout": "flow",
+      "nodes": [
+        { "id": "click", "label": "GET /Ab3x9Qz", "shape": "person", "col": 0, "row": 0, "step": "A friend clicks the short link and is redirected straight away." },
+        {
+          "id": "list", "label": "clicks:pending", "shape": "doc", "col": 1, "row": 0,
+          "file": "src/routes/links.ts: followLink()",
+          "step": "On the way out, the redirect drops the code Ab3x9Qz at the end of the clicks list. That is all.",
+          "details": "A Redis list used as a queue: new clicks are pushed on the end, the job pops them off the front. Pushing is a single in-memory operation, so the redirect never waits for it.",
+          "code": "await redis.rpush('clicks:pending', code)"
+        },
+        {
+          "id": "job", "label": "jobs/clicks.ts", "shape": "gear", "col": 2, "row": 0,
+          "file": "src/jobs/clicks.ts",
+          "step": "Every 10 seconds the click job takes up to 1,000 codes off the list and counts them per link.",
+          "code": "const codes = await redis.lpop('clicks:pending', 1000)\nif (codes?.length) await addClicks(countBy(codes))"
+        },
+        { "id": "pg", "label": "Postgres", "shape": "db", "col": 3, "row": 0, "step": "It writes one UPDATE per link: clicks = clicks + 37, instead of 37 separate writes." },
+        { "id": "stats", "label": "Stats page", "shape": "laptop", "col": 3, "row": 1, "step": "The stats page reads the totals, at most a few seconds behind." }
+      ],
+      "edges": [
+        { "from": "click", "to": "list", "label": "rpush" },
+        { "from": "list", "to": "job", "label": "lpop 1000" },
+        { "from": "job", "to": "pg", "label": "adds up" },
+        { "from": "pg", "to": "stats", "label": "shows" }
+      ],
+      "points": [
+        "The clicks list is a to-do pile: redirects add to it instantly, the job clears it in batches.",
+        "If the server stops between lpop and the UPDATE, that batch of clicks is lost. Fine for stats, not for money."
+      ],
+      "quiz": [
+        { "q": "What does the redirect do with a click?", "choices": ["Writes it to Postgres", "Pushes the code onto the clicks list in Redis", "Sends it to the stats page"], "answer": 1, "why": "It only pushes onto the list, so the redirect stays instant; the job does the writing later." }
+      ]
+    }
+  ]
+}

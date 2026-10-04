@@ -105,9 +105,11 @@ function index(stories) {
   }
   const roots = stories.filter(s => !parent.has(s.story.id)).sort((a, b) => b.mtime - a.mtime)
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Founds Doodle library</title>
+<script>try { const t = localStorage.getItem('doodle-theme'); if (t) document.documentElement.dataset.theme = t } catch {}</script>
 <style>
-:root { --bg: #f4f1ea; --ink: #2f2a26; --muted: #7a7064; --line: #e2dccf; --accent: #d97757; }
-@media (prefers-color-scheme: dark) { :root { --bg: #1d1b19; --ink: #eee7dc; --muted: #a39887; --line: #3a3530; } }
+:root { --bg: #e8eaed; --ink: #23262c; --muted: #6b7280; --line: #d9dde3; --accent: #2f5bd3; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #191c21; --ink: #e8eaed; --muted: #9aa1ad; --line: #333944; } }
+:root[data-theme="dark"] { --bg: #191c21; --ink: #e8eaed; --muted: #9aa1ad; --line: #333944; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { max-width: 760px; margin: 0 auto; padding: 36px 16px; }
 h1 { font: 700 30px/1.2 "Segoe Print", "Comic Sans MS", "Bradley Hand", cursive; margin: 0 0 6px; }

@@ -50,12 +50,15 @@ async function serve(argv, { library, openUrl }) {
     : []
   const inbox = []
   const waiters = []
+  // true from the moment a message reaches the agent until the agent replies
+  let working = false
   const clients = new Set()
 
   const push = (event, data) => {
     for (const res of clients) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
   }
-  const status = () => push('status', { listening: waiters.length > 0 })
+  const state = () => ({ listening: waiters.length > 0, working, waiting: inbox.length })
+  const status = () => push('status', state())
   const record = item => {
     thread.push(item)
     appendFileSync(talkFile, JSON.stringify(item) + '\n')
@@ -88,14 +91,14 @@ async function serve(argv, { library, openUrl }) {
       res.end(JSON.stringify(data))
     }
     try {
-      if (url.pathname === '/api/ping') return json(200, { ok: true, listening: waiters.length > 0 })
+      if (url.pathname === '/api/ping') return json(200, { ok: true, ...state() })
       if (url.pathname === '/api/thread') {
         const id = url.searchParams.get('story')
         return json(200, thread.filter(t => !id || t.story === id))
       }
       if (url.pathname === '/api/events') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
-        res.write(`event: status\ndata: ${JSON.stringify({ listening: waiters.length > 0 })}\n\n`)
+        res.write(`event: status\ndata: ${JSON.stringify(state())}\n\n`)
         clients.add(res)
         req.on('close', () => clients.delete(res))
         return
@@ -109,11 +112,17 @@ async function serve(argv, { library, openUrl }) {
         let delivered = false
         while (waiters.length && !delivered) delivered = waiters.shift()(item)
         if (!delivered) inbox.push(item)
+        else working = true
         status()
         return json(200, { delivered, waiting: inbox.length })
       }
       if (url.pathname === '/api/next') {
-        if (inbox.length) return json(200, inbox.shift())
+        if (inbox.length) {
+          working = true
+          json(200, inbox.shift())
+          status()
+          return
+        }
         let done = false
         const answer = item => {
           if (done) return false
@@ -149,6 +158,8 @@ async function serve(argv, { library, openUrl }) {
         const last = [...thread].reverse().find(t => t.from === 'you')
         const item = { from: 'agent', story: String(b.story || last?.story || ''), scene: Number(b.scene ?? last?.scene ?? 0), text, at: new Date().toISOString() }
         record(item)
+        working = false
+        status()
         return json(200, { ok: true })
       }
       // the library itself: only files inside the folder, never dotfiles
@@ -205,7 +216,9 @@ async function serve(argv, { library, openUrl }) {
       pending = new Set()
       try {
         stories = library(dir)
-        const ids = stories.filter(s => changed.includes(basename(s.file))).map(s => s.story.id)
+        const touched = stories.filter(s => changed.includes(basename(s.file)))
+        // a new or changed zoom/concept story also changes its parent's links
+        const ids = [...new Set(touched.flatMap(s => [s.story.id, s.story.up].filter(Boolean)))]
         push('reload', { ids })
         if (ids.length) console.log(`doodle: rebuilt ${ids.join(', ')}`)
       } catch (e) {
