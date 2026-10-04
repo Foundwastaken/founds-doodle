@@ -95,6 +95,16 @@
   label.small { display: block; margin: 0 0 6px; }
   .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
   .tabs button { font-size: 13px; padding: 5px 10px; }
+  #live { margin: 0 0 10px; font-size: 13px; }
+  #live.on { color: #3a9d5d; }
+  #live.wait { color: var(--muted); }
+  #thread { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; margin: 0 0 10px; }
+  #thread:empty { display: none; }
+  .msg { padding: 8px 10px; border-radius: 10px; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+  .msg b { display: block; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+  .msg.you { background: var(--bg); border: 1px solid var(--line); margin-left: 24px; }
+  .msg.agent { background: #fff5d6; color: #2f2a26; margin-right: 24px; }
+  .msg.agent b { color: #8a3b1f; }
   kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 </style>
 </head>
@@ -142,11 +152,14 @@
     </div>
     <div class="card">
       <h2>Talk to your agent</h2>
+      <p id="live"></p>
+      <div id="thread"></div>
       <div class="tabs" id="talkModes"></div>
       <p id="subject"></p>
       <ul id="said"></ul>
       <textarea id="q" placeholder="Ask about this scene. Your drawing goes with it."></textarea>
       <div class="row">
+        <button id="sendLive" class="primary" hidden>Send to agent</button>
         <button id="copy" class="primary">Copy message</button>
         <button id="png">Save picture</button>
         <button id="zoom" disabled>Zoom in on…</button>
@@ -183,6 +196,9 @@
   } catch {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ marks, journal })) } catch {} }
   const escText = t => String(t).replace(/[<&]/g, c => (c === '<' ? '&lt;' : '&amp;'))
+  // live mode: the page was opened from `doodle.mjs serve`, so it can talk to the agent directly
+  let live = false, listening = false, pendingNew = null
+  let thread = []
   const TALK = [
     ['ask', 'Ask', 'Ask about this scene. Your drawing goes with it.'],
     ['check', 'Check my understanding', 'Explain this scene in your own words. Leave it empty to send your notebook notes.'],
@@ -311,7 +327,7 @@
     }
     $('hint').textContent = HINTS[mode]()
     $('stage').className = mode === 'pen' ? 'pen' : 'picking'
-    $('noteForm').className = (mode === 'note' || mode === 'add') && pending ? 'show' : ''
+    $('noteForm').className = ((mode === 'note' || mode === 'add') && pending) || pendingNew ? 'show' : ''
     $('subject').textContent = subject ? `Asking about: ${name(subject)}` : ''
     $('said').innerHTML = ''
     for (const line of drawn()) {
@@ -337,6 +353,12 @@
       b.onclick = () => { talk = m; ui() }
       $('talkModes').append(b)
     }
+    $('live').className = live ? (listening ? 'on' : 'wait') : ''
+    $('live').textContent = !live ? '' : listening
+      ? '● Live: your agent is listening.'
+      : '○ Live: your agent picks messages up when it next listens.'
+    $('sendLive').hidden = !live
+    $('copy').className = live ? '' : 'primary'
     $('copy').textContent = { quiz: 'Copy quiz request', check: 'Copy for checking', change: 'Copy change prompt', term: 'Copy explain request' }[talk] || 'Copy message'
     const nd = subject && scene().nodes.find(x => x.id === subject)
     $('zoom').disabled = !nd
@@ -473,6 +495,19 @@
   $('noteForm').addEventListener('submit', ev => {
     ev.preventDefault()
     const text = $('noteText').value.trim()
+    if (pendingNew) {
+      const pn = pendingNew
+      pendingNew = null
+      if (text) {
+        const k = marks.reduce((mx, m) => (m.kind === 'add' && m.id ? Math.max(mx, Number(m.id.slice(4)) || 0) : mx), 0) + 1
+        addMark({ s: i, kind: 'add', id: `new-${k}`, a: '', x: pn.x, y: pn.y, text })
+      } else {
+        addMark({ s: i, kind: 'free', a: pn.reading.hits[0] || '', b: pn.reading.hits[1], pts: pn.flat, shape: pn.reading.shape, hits: pn.reading.hits })
+      }
+      $('noteText').value = ''
+      ui()
+      return
+    }
     if (pending && text && mode === 'add') {
       const k = marks.reduce((mx, m) => (m.kind === 'add' && m.id ? Math.max(mx, Number(m.id.slice(4)) || 0) : mx), 0) + 1
       addMark({ s: i, kind: 'add', id: `new-${k}`, a: '', x: pending.x, y: pending.y, text })
@@ -517,6 +552,17 @@
     stroke = null
     ctx.clearRect(0, 0, ink.width, ink.height)
     const reading = interpret(scene(), flat, boxes().extra)
+    if (reading.shape === 'loop' && reading.empty) {
+      // drawn around nothing: that is a new part. Ask its name where it was drawn.
+      const xs = [], ys = []
+      for (let k = 0; k + 1 < flat.length; k += 2) { xs.push(flat[k]); ys.push(flat[k + 1]) }
+      const cx = xs.reduce((a, b) => a + b, 0) / xs.length, cy = ys.reduce((a, b) => a + b, 0) / ys.length
+      pendingNew = { x: Math.round(cx * 1000) / 1000, y: Math.round(cy * 1000) / 1000, flat, reading }
+      const el = $('svg').querySelector('svg').getBoundingClientRect()
+      ui()
+      popForm({ clientX: el.left + cx * el.width, clientY: el.top + cy * el.height }, 'What is this new part? (empty = just a drawing)')
+      return
+    }
     addMark({ s: i, kind: 'free', a: reading.hits[0] || '', b: reading.hits[1], pts: flat, shape: reading.shape, hits: reading.hits })
   }
   ink.addEventListener('pointerup', endStroke)
@@ -663,6 +709,69 @@
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 2000)
   }
+  function renderThread() {
+    const host = $('thread')
+    host.innerHTML = ''
+    for (const it of thread.slice(-40)) {
+      const d = document.createElement('div')
+      d.className = 'msg ' + (it.from === 'agent' ? 'agent' : 'you')
+      d.innerHTML = `<b>${it.from === 'agent' ? 'Agent' : 'You'}${it.scene ? ` · scene ${it.scene}` : ''}</b>${escText(it.display || it.text)}`
+      host.append(d)
+    }
+    host.scrollTop = host.scrollHeight
+  }
+  async function deliver(text, display) {
+    if (!live) return copy(text)
+    try {
+      const r = await fetch('/api/send', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ story: story.id, scene: i + 1, text, display }),
+      })
+      const d = await r.json()
+      toast(d.delivered ? 'Sent. Your agent is on it.' : 'Sent. Your agent will pick it up when it listens.')
+      $('q').value = ''
+      ui()
+    } catch {
+      copy(text)
+    }
+  }
+  const shortAsk = () => {
+    const q = $('q').value.trim()
+    const label = { ask: 'Question', check: 'Check my understanding', quiz: 'Quiz me', term: 'Explain a term', change: 'Propose a change' }[talk]
+    const marks = drawn().length
+    return `${label}${q ? `: ${q}` : ''}${marks ? `\n(${marks} mark${marks === 1 ? '' : 's'} on the scene)` : ''}`
+  }
+  $('sendLive').onclick = () => deliver(message(), shortAsk())
+  async function connect() {
+    if (!location.protocol.startsWith('http')) return
+    try {
+      const r = await fetch('/api/ping')
+      if (!r.ok) return
+      listening = (await r.json()).listening
+      live = true
+    } catch {
+      return
+    }
+    try { thread = await (await fetch('/api/thread?story=' + encodeURIComponent(story.id))).json() } catch {}
+    renderThread()
+    ui()
+    const es = new EventSource('/api/events')
+    es.addEventListener('status', e => { listening = JSON.parse(e.data).listening; ui() })
+    es.addEventListener('thread', e => {
+      const it = JSON.parse(e.data)
+      if (it.story && it.story !== story.id) return
+      thread.push(it)
+      renderThread()
+      if (it.from === 'agent') toast('Your agent answered.')
+    })
+    es.addEventListener('reload', e => {
+      const { ids } = JSON.parse(e.data)
+      if (!ids.includes(story.id)) return
+      location.hash = `scene=${i + 1}`
+      location.reload()
+    })
+  }
   $('copy').onclick = () => copy(message())
   $('saveCopy').onclick = () => {
     const json = JSON.stringify({ marks, journal, savedAt: Date.now() }).replace(/<\/(script)/gi, '<\\/$1').replace(/<!--/g, '<\\!--')
@@ -680,7 +789,7 @@
     if (!nd) return
     if (nd.zoom && KNOWN[nd.zoom]) { location.href = `${nd.zoom}.html`; return }
     const id = `${story.id}-${slug(nd.label)}`
-    copy(`[doodle] Zoom in please: use the founds-doodle skill to tell a deeper story about "${nd.label}"${nd.note ? ` (${nd.note})` : ''}, from your story "${story.title}" (scene ${i + 1}, "${scene().title}"). Read its code first.` +
+    deliver(`[doodle] Zoom in please: use the founds-doodle skill to tell a deeper story about "${nd.label}"${nd.note ? ` (${nd.note})` : ''}, from your story "${story.title}" (scene ${i + 1}, "${scene().title}"). Read its code first.` +
       (SOURCE ? ` Save it next to ${SOURCE} with id "${id}" and "up": "${story.id}", and set "zoom": "${id}" on node "${nd.id}" in scene ${i + 1} of this story, so the two link up.` : ''))
   }
   $('q').addEventListener('input', () => { $('preview').textContent = message() })
@@ -742,6 +851,7 @@
     ui()
   }
   if (hp.has('preview')) document.querySelector('details').open = true
+  connect()
 })()
 </script>
 </body>

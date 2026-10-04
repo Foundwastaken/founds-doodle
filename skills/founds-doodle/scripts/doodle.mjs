@@ -7,6 +7,11 @@
 //   node doodle.mjs .doodle/overview.json --open     build it (and its neighbours), open it
 //   node doodle.mjs .doodle --open                   rebuild the library, open the index
 //   cat story.json | node doodle.mjs - -o out.html
+//
+// Live mode (pages talk to the agent directly; see live.mjs):
+//   node doodle.mjs serve .doodle --open <story id>
+//   node doodle.mjs listen
+//   node doodle.mjs reply "answer"
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { dirname, resolve, join, basename, extname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -20,10 +25,15 @@ const value = name => {
   const k = args.indexOf(name)
   return k >= 0 ? args[k + 1] : undefined
 }
+const COMMANDS = ['serve', 'listen', 'reply']
+const command = COMMANDS.includes(args[0]) ? args[0] : null
 const input = args.find((a, k) => (a === '-' || !a.startsWith('-')) && args[k - 1] !== '-o')
 
-if (!input || flag('-h') || flag('--help')) {
+if (!command && (!input || flag('-h') || flag('--help'))) {
   console.log('usage: node doodle.mjs <story.json | folder | -> [-o out.html] [--open]')
+  console.log('       node doodle.mjs serve [folder] [--open <story id>]   live mode: pages talk to the agent')
+  console.log('       node doodle.mjs listen                             wait for the next message from a page')
+  console.log('       node doodle.mjs reply "text" | --file answer.md    show an answer on the page')
   process.exit(input ? 0 : 1)
 }
 
@@ -43,7 +53,7 @@ function load(raw, file) {
   if (!j.id && file) story.id = slug(basename(file, extname(file)))
   const where = file ? basename(file) : 'story'
   const asked = Array.isArray(j.scenes) ? j.scenes.length : 1
-  if (asked > story.scenes.length) console.warn(`doodle: ${where}: kept ${story.scenes.length} of ${asked} scenes (limit for style "${story.style}", or scenes with fewer than 2 valid nodes).`)
+  if (asked > story.scenes.length) console.warn(`doodle: ${where}: kept ${story.scenes.length} of ${asked} scenes (a scene needs at least 2 parts with an id and a label).`)
   ;(Array.isArray(j.scenes) ? j.scenes : [j]).forEach((s, k) => {
     const ids = new Set((s.nodes || []).map(nd => nd.id))
     const bad = (s.edges || []).filter(e => !ids.has(e.from) || !ids.has(e.to) || e.from === e.to)
@@ -63,7 +73,7 @@ function page(story, source, known) {
 
 // Every story in a folder: build each page, then the index.
 function library(dir) {
-  const files = existsSync(dir) ? readdirSync(dir).filter(f => f.endsWith('.json')) : []
+  const files = existsSync(dir) ? readdirSync(dir).filter(f => f.endsWith('.json') && !f.startsWith('.')) : []
   const stories = []
   for (const f of files) {
     const file = join(dir, f)
@@ -113,7 +123,10 @@ em { font-style: normal; font-size: 12px; color: var(--accent); border: 1px soli
 }
 
 function open(target) {
-  const url = pathToFileURL(target).href
+  openUrl(pathToFileURL(target).href)
+}
+
+function openUrl(url) {
   const [cmd, cmdArgs] =
     process.platform === 'win32' ? ['cmd', ['/c', 'start', '""', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]]
   try {
@@ -128,7 +141,10 @@ const fail = () => {
   process.exit(2)
 }
 
-if (input === '-') {
+if (command) {
+  const { run } = await import('./live.mjs')
+  await run(command, args.slice(1), { library, openUrl })
+} else if (input === '-') {
   const story = load(readFileSync(0, 'utf8'))
   if (!story) fail()
   const out = resolve(value('-o') ?? `${story.id}.html`)

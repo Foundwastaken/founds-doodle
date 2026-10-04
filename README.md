@@ -94,7 +94,17 @@ Every story lives in `.doodle/` in your project with an `index.html` library. De
 | **Explain a term** | "What is an API?" The agent makes a concept story that ends inside your story. |
 | **Propose a change** | Draw the design you want and get a ready-made change prompt (see the tour). |
 
-Press **Copy** and paste it into your agent's chat. **Save picture** gives you a PNG to attach as well. What you and the agent settle shows up under **What we figured out** in the scene's notebook, next to your own notes.
+What you and the agent settle shows up under **What we figured out** in the scene's notebook, next to your own notes.
+
+### Live: the page talks to your agent directly
+
+When your agent can keep a command running (Claude Code can, in the background), it starts a small local server and the page gets a **Send to agent** button:
+
+- you press **Send to agent**, and your message, drawing included, goes straight to the agent;
+- the agent answers in your chat **and** in a chat thread on the page;
+- when the agent updates the story (a correction, a note you agreed on), the page reloads by itself and keeps your drawings and notes.
+
+Everything stays on your computer: the server only listens on `127.0.0.1`. Without live mode, press **Copy** and paste the message into your agent's chat instead (**Save picture** gives you a PNG to attach as well). Same message, same answers.
 
 ## Install
 
@@ -168,6 +178,7 @@ you ask ──> agent reads the code ──> .doodle/<id>.json ──> scripts/d
 | `skills/founds-doodle/scripts/doodle.mjs` | Checks the story JSON and builds the self-contained HTML pages and the library index. |
 | `skills/founds-doodle/scripts/core.js` | Lays out each scene and draws it as SVG with SMIL animation. The agent writes a small JSON story and never draws pixels or writes markup. |
 | `skills/founds-doodle/scripts/player.html` | The page: scenes, drawing tools, notebook and talk panel. |
+| `skills/founds-doodle/scripts/live.mjs` | Live mode: the local server (`serve`), and the agent's `listen` and `reply` commands. |
 | `skills/founds-doodle/references/story-format.md` | The story format. |
 | `skills/founds-doodle/agents/openai.yaml` | How the skill shows up in Codex. |
 
@@ -181,13 +192,16 @@ Handy links: add `#scene=3` to a story's address to open a scene, `#focus` to hi
 
 ## Privacy
 
-Everything runs locally. The pages are plain files with no network requests, and nothing is sent anywhere. The page reaches your agent only through what you copy and paste yourself. Your drawings and notes stay in your browser (`localStorage`) unless you press **Save my copy**.
+Everything runs locally. The pages make no requests to the internet, and nothing is sent anywhere. In live mode the page talks only to the small server your agent started on `127.0.0.1` (this computer); otherwise it reaches your agent only through what you copy and paste. Your drawings and notes stay in your browser (`localStorage`) unless you press **Save my copy**; live conversations are kept in `.doodle/talk.jsonl` in your project.
 
-## Limits
+## Big codebases
 
-- Talking back works by copy and paste, not a live connection to your agent.
-- One story holds up to 10 scenes of up to 12 parts. Go further with linked part stories.
-- Pen strokes are read relative to the parts (loops, lines, marks). Use **+ Add box** for something new.
+There is no small cap on scenes or parts: a story is as long as its journey, from 1 scene to dozens. Long paths fold back and forth across the page so big scenes stay readable. For a large codebase the skill builds a library instead of one giant story: an overview, then a linked part story per subsystem, as deep as you want to go.
+
+## Good to know
+
+- Live mode needs an agent that can keep a command running (Claude Code can). Other agents use copy and paste, with the same messages and answers.
+- Pen strokes are read relative to the parts: loops, lines, marks. A loop drawn around empty space asks for a name and becomes a new part.
 
 ## License
 

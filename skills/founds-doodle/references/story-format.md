@@ -10,12 +10,12 @@ One JSON object. The script (`scripts/doodle.mjs`) validates it, drops what it c
   "term": "API",                            // with kind: the word it explains
   "title": "string, up to 44 chars",
   "style": "simple | normal | rich",        // optional, default "normal"
-  "scenes": [                               // simple: up to 2, normal: up to 5, rich: up to 10
+  "scenes": [                               // as many as the story needs (safety limit 60)
     {
       "title": "string",
       "narration": "1-2 storybook sentences", // optional, shown under the scene
       "layout": "flow | down | cycle",        // optional, default "flow"
-      "nodes": [                              // at least 2; simple: up to 5, normal: 9, rich: 12
+      "nodes": [                              // at least 2 (safety limit 40; past ~10, split the scene)
         {
           "id": "unique within this scene",
           "label": "up to 20 chars (longer is cut)",
@@ -25,14 +25,14 @@ One JSON object. The script (`scripts/doodle.mjs`) validates it, drops what it c
           "step": "one sentence said as the pen reaches this part (up to 160 chars)",
           "details": "2-3 plain sentences shown when the part is clicked (up to 700)",
           "file": "real path(s) for this part",
-          "code": "a real excerpt, up to 16 lines",
+          "code": "a real excerpt, up to 30 lines (keep it short)",
           "col": 0, "row": 0                    // optional grid position: give it to every node or to none
         }
       ],
       "edges": [
         { "from": "node id", "to": "node id", "label": "optional verb, up to 14 chars", "step": "optional caption" }
       ],
-      "zones": [{ "label": "Server", "nodes": ["node id"] }],   // up to 4 dashed areas
+      "zones": [{ "label": "Server", "nodes": ["node id"] }],   // up to 8 dashed areas
       "points": ["1-3 Remember lines shown after the scene"],
       "notes": ["what the user and the agent settled, one short line each (up to 12)"]
     }
@@ -50,7 +50,7 @@ The reader's drawings and own notes live in their browser, keyed by the story `i
 
 ## How it is drawn
 
-- **flow**: nodes are placed in layers by following the edges from the nodes nothing points to (dead ends go last); up to 6 layers per row, then the next row.
+- **flow**: the longest path through the scene runs along one row; a long one folds back and forth like a snake (6 per row). Side exits, dead ends and extra starters sit just below the step they belong to.
 - **grid**: when every node has `col` and `row`, they are placed exactly there, and drawn in the order listed. Use it for scenes that branch.
 - **down**: the same layers, top to bottom.
 - **cycle**: nodes on a ring, in the order given.

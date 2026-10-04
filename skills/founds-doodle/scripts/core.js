@@ -4,7 +4,8 @@
 export const SHAPES = ['box', 'round', 'diamond', 'db', 'person', 'cloud', 'note', 'server', 'laptop', 'bulb', 'lock', 'doc', 'star', 'gear'];
 const PICTOS = ['person', 'server', 'laptop', 'bulb', 'lock', 'doc', 'star', 'gear'];
 const BASIC = ['box', 'round', 'diamond', 'db', 'person', 'cloud'];
-const MAX_NODES = { simple: 5, normal: 9, rich: 12 };
+// Safety limits only, far above any readable scene: depth is the story's choice, not the script's.
+const MAX_NODES = { simple: 40, normal: 40, rich: 40 };
 const INK = '#2f2a26';
 const PAPER = '#fffdf6';
 const FILLS = ['#ffd7a8', '#cfe8ff', '#d4f1c5', '#ffd0e0', '#e6d9ff', '#fff1a8'];
@@ -32,17 +33,17 @@ function parseScene(j, style) {
             note: n.note ? clip(String(n.note), 60) : undefined,
             zoom: n.zoom ? slug(String(n.zoom)) : undefined,
             step: n.step ? clip(String(n.step), 160) : undefined,
-            col: Number.isInteger(n.col) && n.col >= 0 && n.col < 8 ? n.col : undefined,
-            row: Number.isInteger(n.row) && n.row >= 0 && n.row < 6 ? n.row : undefined,
+            col: Number.isInteger(n.col) && n.col >= 0 && n.col < 30 ? n.col : undefined,
+            row: Number.isInteger(n.row) && n.row >= 0 && n.row < 20 ? n.row : undefined,
             details: n.details ? clip(String(n.details), 700) : undefined,
             file: n.file ? clip(String(n.file), 120) : undefined,
-            code: n.code ? String(n.code).replace(/\t/g, '  ').split('\n').slice(0, 16).map(l => clip(l, 110)).join('\n') : undefined,
+            code: n.code ? String(n.code).replace(/\t/g, '  ').split('\n').slice(0, 30).map(l => clip(l, 110)).join('\n') : undefined,
         });
     }
     if (nodes.length < 2)
         return undefined;
     const edges = [];
-    for (const e of Array.isArray(j.edges) ? j.edges.slice(0, 16) : []) {
+    for (const e of Array.isArray(j.edges) ? j.edges.slice(0, 80) : []) {
         const from = String(e?.from ?? '');
         const to = String(e?.to ?? '');
         if (from !== to && seen.has(from) && seen.has(to)) {
@@ -56,14 +57,14 @@ function parseScene(j, style) {
         nodes,
         edges,
         caption: j.narration || j.caption ? clip(String(j.narration ?? j.caption), 230) : undefined,
-        notes: Array.isArray(j.notes) ? j.notes.slice(0, 12).map(x => clip(String(x), 280)).filter(Boolean) : [],
-        points: Array.isArray(j.points) ? j.points.slice(0, 6).map(x => clip(String(x), 160)).filter(Boolean) : [],
+        notes: Array.isArray(j.notes) ? j.notes.slice(0, 50).map(x => clip(String(x), 280)).filter(Boolean) : [],
+        points: Array.isArray(j.points) ? j.points.slice(0, 10).map(x => clip(String(x), 160)).filter(Boolean) : [],
         zones: Array.isArray(j.zones)
-            ? j.zones.slice(0, 4).map(z => ({ label: clip(String(z?.label ?? ''), 30), nodes: (Array.isArray(z?.nodes) ? z.nodes : []).map(String).filter(id => seen.has(id)) })).filter(z => z.nodes.length)
+            ? j.zones.slice(0, 8).map(z => ({ label: clip(String(z?.label ?? ''), 30), nodes: (Array.isArray(z?.nodes) ? z.nodes : []).map(String).filter(id => seen.has(id)) })).filter(z => z.nodes.length)
             : [],
     };
 }
-const MAX_SCENES = { simple: 2, normal: 5, rich: 10 };
+const MAX_SCENES = { simple: 60, normal: 60, rich: 60 };
 // A file-name-safe id: stories link to each other and keep the reader's drawings by it.
 export const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'story';
 export function parseStory(raw, asked = 'normal') {
@@ -371,46 +372,67 @@ function layout(spec, capH) {
             break;
         spine.unshift(prev);
     }
-    const onSpine = new Set(spine);
+    // A long spine folds like a snake: left to right, then right to left one band lower,
+    // so every fold continues right under where the last one ended. Each band keeps its
+    // side parts in the rows just below it.
+    const PER = spine.length <= 7 ? Math.max(1, spine.length) : 6;
+    const band = new Array(n).fill(-1);
     const col = new Array(n).fill(-1);
-    const row = new Array(n).fill(-1);
-    spine.forEach((ni, k) => { col[ni] = k; row[ni] = 0; });
-    const taken = new Set(spine.map(ni => `${col[ni]},0`));
-    // a free spot near column c: the row below first, sideways before going deeper
-    const place = (ni, c) => {
-        for (let r = 1; r < 6; r++)
+    const sub = new Array(n).fill(-1);
+    spine.forEach((ni, k) => {
+        const b = Math.floor(k / PER);
+        band[ni] = b;
+        col[ni] = b % 2 === 0 ? k % PER : PER - 1 - (k % PER);
+        sub[ni] = 0;
+    });
+    const taken = new Set(spine.map(ni => `${band[ni]},${col[ni]},0`));
+    // keep clear the column where a fold drops down to the next band
+    const drops = new Set();
+    for (let k = PER - 1; k < spine.length - 1; k += PER)
+        drops.add(`${band[spine[k]]},${col[spine[k]]}`);
+    const maxCol = PER;    // one spare column at the edge for side parts
+    // a free spot near column c of band b: the row below first, sideways before going deeper
+    const place = (ni, b, c) => {
+        for (let r = 1; r < 20; r++)
             for (const dc of [0, 1, -1, 2, -2]) {
                 const cc = c + dc;
-                if (cc < 0 || cc > spine.length || taken.has(`${cc},${r}`))
+                if (cc < 0 || cc > maxCol || taken.has(`${b},${cc},${r}`) || drops.has(`${b},${cc}`))
                     continue;
+                band[ni] = b;
                 col[ni] = cc;
-                row[ni] = r;
-                taken.add(`${cc},${r}`);
+                sub[ni] = r;
+                taken.add(`${b},${cc},${r}`);
                 return;
             }
+        band[ni] = b;
         col[ni] = c;
-        row[ni] = 6;
+        sub[ni] = 20;
     };
-    // repeat so nodes hanging off other placed nodes find their spot too
-    for (let pass = 0; pass < n && col.includes(-1); pass++) {
+    // repeat so parts hanging off other placed parts find their spot too
+    for (let pass = 0; pass < n && band.includes(-1); pass++) {
         for (const ni of order) {
-            if (col[ni] >= 0)
+            if (band[ni] >= 0)
                 continue;
-            const parents = spec.edges.filter(e => idx.get(e.to) === ni).map(e => idx.get(e.from)).filter(u => col[u] >= 0);
-            const kids = spec.edges.filter(e => idx.get(e.from) === ni).map(e => idx.get(e.to)).filter(v => col[v] >= 0);
+            const parents = spec.edges.filter(e => idx.get(e.to) === ni).map(e => idx.get(e.from)).filter(u => band[u] >= 0);
+            const kids = spec.edges.filter(e => idx.get(e.from) === ni).map(e => idx.get(e.to)).filter(v => band[v] >= 0);
             if (parents.length) {
-                const avg = parents.reduce((t, u) => t + col[u], 0) / parents.length;
-                place(ni, Math.round(parents.length > 1 ? avg : avg + (kids.length ? 0 : 0)));
+                const b = band[parents[0]];
+                const same = parents.filter(u => band[u] === b);
+                place(ni, b, Math.round(same.reduce((t, u) => t + col[u], 0) / same.length));
             }
             else if (kids.length)
-                place(ni, Math.max(0, Math.min(...kids.map(v => col[v])) - 1));
+                place(ni, band[kids[0]], col[kids[0]]);
             else if (pass === n - 1 || !spec.edges.some(e => idx.get(e.to) === ni || idx.get(e.from) === ni))
-                place(ni, Math.max(0, Math.min(depth[ni], spine.length - 1)));
+                place(ni, 0, 0);
         }
     }
     for (let i = 0; i < n; i++)
-        if (col[i] < 0)
-            place(i, 0);
+        if (band[i] < 0)
+            place(i, 0, 0);
+    const bands = Math.max(...band) + 1;
+    const height = Array.from({ length: bands }, (_, b) => 1 + Math.max(0, ...sub.filter((_, i) => band[i] === b)));
+    const base = height.map((_, b) => height.slice(0, b).reduce((t, h) => t + h, 0));
+    const row = sub.map((r, i) => base[band[i]] + r);
     const cols = Math.max(...col) + 1;
     const rows = Math.max(...row) + 1;
     if (spec.layout === 'down') {
@@ -419,26 +441,6 @@ function layout(spec, capH) {
         const left = (W - rows * PITCH_X) / 2;
         const pos = spec.nodes.map((_, i) => ({ x: left + (row[i] + 0.5) * PITCH_X, y: TITLE_H + 50 + col[i] * pitchY }));
         return { pos, order, W, H: TITLE_H + 50 + (cols - 1) * pitchY + 80 + capH };
-    }
-    if (cols > 7) {
-        // a very long spine: fold it into rows of 6, the old way
-        const layers = [];
-        for (let i = 0; i < n; i++)
-            (layers[depth[i]] || (layers[depth[i]] = [])).push(i);
-        const per = 6;
-        const W = Math.max(520, per * PITCH_X + 2 * PAD);
-        const left = (W - per * PITCH_X) / 2;
-        const pos = new Array(n);
-        let top = TITLE_H;
-        for (let b = 0; b * per < layers.length; b++) {
-            const band = layers.slice(b * per, b * per + per);
-            const h = Math.max(...band.map(l => l.length));
-            band.forEach((l, c) => l.forEach((ni, k) => {
-                pos[ni] = { x: left + (c + 0.5) * PITCH_X, y: top + (h * pitchY) / 2 + (k - (l.length - 1) / 2) * pitchY };
-            }));
-            top += h * pitchY + 10;
-        }
-        return { pos, order, W, H: top + capH };
     }
     const W = Math.max(520, cols * PITCH_X + 2 * PAD);
     const left = (W - cols * PITCH_X) / 2;
@@ -606,7 +608,7 @@ export function renderScene(spec, o) {
         const x1 = Math.max(...ids.map(i => pos[i].x + drawn[i].hw)) + 16;
         const y0 = Math.min(...ids.map(i => pos[i].y - drawn[i].hh)) - 26;
         const y1 = Math.max(...ids.map(i => pos[i].y + Math.max(drawn[i].hh, spec.nodes[i].note ? drawn[i].noteY + 8 : 0))) + 12;
-        const tint = ['#f3ead7', '#e3eef6', '#e5f2e1', '#f6e3ea'][k % 4];
+        const tint = ['#f3ead7', '#e3eef6', '#e5f2e1', '#f6e3ea', '#efe6f7', '#e2f1f0', '#f7ecd9', '#e9edf2'][k % 8];
         const d = [rl(x0, y0, x1, y0, rng, 2), rl(x1, y0, x1, y1, rng, 2), rl(x1, y1, x0, y1, rng, 2), rl(x0, y1, x0, y0, rng, 2)].join(' ');
         parts.push(`<g opacity="0">${fade(0.3, 0.6)}<rect x="${f(x0)}" y="${f(y0)}" width="${f(x1 - x0)}" height="${f(y1 - y0)}" rx="16" fill="${tint}" opacity="0.6"/><path d="${d}" fill="none" stroke="#b9ae98" stroke-width="1.6" stroke-dasharray="6 6" stroke-linecap="round"/><text x="${f(x0 + 12)}" y="${f(y0 + 17)}" font-size="12.5" font-weight="bold" fill="#8a7f6a" letter-spacing="1">${esc(z.label.toUpperCase())}</text></g>`);
     });
@@ -737,7 +739,7 @@ export function interpret(spec, flat, extra = []) {
         if (hits.length)
             return { shape: 'loop', hits };
         const n = nearest(centroid, 80);
-        return { shape: 'loop', hits: n ? [n.id] : [] };
+        return { shape: 'loop', hits: n ? [n.id] : [], empty: true };
     }
     if (span > 40) {
         const a = nearest(first);
