@@ -8,8 +8,9 @@ description: Founds Doodle, a doodle way of learning. Explains a codebase, proje
 Turn "how does my code work?" into a short animated story the user can learn from with you. The story is a few scenes of hand-drawn boxes and arrows, each with one storybook narrator line. The bundled script draws it into a single HTML page, so no image model or API key is needed. On that page the user:
 
 - plays the story and draws on it (pen, circle, arrow, "?", note, add box, cross out),
+- takes a quiz at the end: tap-to-answer questions built from the drawing, plus the ones you write,
 - keeps a notebook per scene: their own notes, plus "What we figured out", which you write,
-- talks back to you: **Ask**, **Check my understanding**, **Quiz me**, **Explain a term** or **Propose a change**, either live (the page sends straight to you, see 4) or by copy and paste,
+- talks back to you: **Ask**, **Check my understanding**, **Explain a term** or **Propose a change**, either live (the page sends straight to you, see 4) or by copy and paste,
 - saves a copy with their drawings and notes, and browses a library of stories that link from overview to detail.
 
 ## 1. Pick the depth
@@ -73,13 +74,14 @@ Storytelling rules. A story is not a diagram with captions: it follows someone o
 - `details` (2-3 plain sentences: what it does and why it is built that way), `file` (real path) and `code` (a real excerpt of up to ~8 lines, copied from the file, never invented) on the parts a reader will click. In `simple` stories skip `code` and keep `details` short.
 - `zones` group parts by where they live ("Browser", "Server", "Database"). Keep each zone's parts next to each other.
 - `points`: 1-3 "Remember" lines per scene: the rule, the gotcha or the design decision worth keeping.
+- `quiz`: 2-3 multiple-choice questions per scene (skip it for the "where to start reading" scene). The page already makes quick questions from the drawing (which part does this, what comes next, the order of the steps, the hidden part), so yours should test understanding: why it is built this way, what happens when something fails, what would break if a part went away. Each is `{ "q": "...", "choices": ["...", "...", "..."], "answer": 0, "why": "one sentence" }`: 3-4 short choices, one clearly right, the wrong ones plausible to a newcomer, never trick questions; `answer` is the index of the right choice; `why` explains the answer in plain words.
 - **Layout:** parts are laid out automatically: the longest path through the scene runs along one row (folding back and forth when it is long), and side exits, dead ends and extra starters sit just below the step they belong to. That is usually right. When you want an exact picture, give every node `col` and `row` (0-based grid): main path on row 0, side exits on row 1 under the step they leave from. Prefer wide and short over tall.
 - Labels up to 20 characters (real file, function or folder names); ids unique within a scene and reused for the same part across scenes; every node has at least one edge.
 - `shape`: `box`, `round` (idea or state), `diamond` (decision), `db` (storage), `person` (user or actor), `cloud` (external service), `note`, `server`, `laptop`, `bulb` (idea), `lock` (security or a hard stop), `doc` (file or data), `star` (goal or happy ending), `gear` (process or engine). Pictures help: use them.
 - Edge labels are short verbs or outcomes, up to 14 characters. Plain ASCII, no emojis.
 - Leave `notes` empty on a new story: they record what the user and you settle later.
 
-**Before you draw, check:** Does every scene move the hero? Read only the `step` lines: do they tell the story without the picture? Is every label, path and code line real? Does a `simple` story stay at 1-2 scenes with no code? Does each branching scene have a grid?
+**Before you draw, check:** Does every scene move the hero? Does each scene have 2-3 quiz questions about *why*, not trivia? Read only the `step` lines: do they tell the story without the picture? Is every label, path and code line real? Does a `simple` story stay at 1-2 scenes with no code? Does each branching scene have a grid?
 
 **A word the user may not know** (a "What is X?" request, or the Explain a term message): make a small concept story with `"kind": "concept"`, `"term": "X"` and `"up": "<the story it came from>"`, saved as `<that id>-<x>.json`. 1-2 scenes explain X from zero with an everyday comparison, and a last scene "How X fits in our story" uses the real parts from the scene it came up in. The parent page then links to it.
 
@@ -122,7 +124,7 @@ The message starts with `[doodle]`; it comes from `listen` in live mode or is pa
 
 - **Ask**: answer in plain words, reading the code where needed.
 - **Check my understanding**: say what is right first, then correct what is wrong (quote the code that shows it), then add the one thing they missed. Be warm and specific; it is fine to say "you're right and I was wrong" if their reading beats the story. Fix the story too in that case.
-- **Quiz me**: ask 3 short questions, one at a time, and wait for each answer. Mix "what happens next", "why is it built this way" and "draw the path of X on the doodle, then paste it back". Say what they got right and wrong.
+- **Quiz results** (from the end-of-story quiz): for each question they missed, explain the right answer in plain words using the story's parts, with a pointer to the code where it helps. Add a short note to each of those scenes, and if a question was unclear or wrong, fix it in the story's `quiz`.
 - **Explain a term**: make a concept story (see "A word the user may not know" above) and draw it.
 - **Propose a change**: read their drawing as a design change: a crossed-out part goes away, a NEW box is something to add, arrows and lines are connections to add or reroute. Check it against the code, then lay out what it would really take (files, risks, what they missed) and **wait for their OK before editing any code**. After the change, update the story to the new flow and add a note saying what changed and why.
 

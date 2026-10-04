@@ -5,169 +5,350 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
 <style>
+  /* A drafting desk: the story is a sheet of paper; the interface is the desk and its tools.
+     Graphite for text, ballpoint blue for the controls you use, red pen for your own marks,
+     highlighter for what matters. */
   :root {
-    --bg: #f4f1ea; --panel: #ffffff; --ink: #2f2a26; --muted: #7a7064; --line: #e2dccf;
-    --accent: #d97757; --red: #e5383b; --chip: #f6f2e8; --chip-on: #2f2a26; --chip-on-ink: #fff;
+    --desk: #e8eaed; --panel: #ffffff; --ink: #23262c; --muted: #6b7280; --line: #d9dde3; --soft: #f2f4f6;
+    --pen: #2f5bd3; --pen-ink: #ffffff; --red: #e5383b; --hl: #ffe873; --paper: #fffdf8; --ok: #2f8f5b;
+    --shadow: 0 1px 2px rgba(35, 38, 44, .06), 0 12px 32px rgba(35, 38, 44, .10);
+    --hand: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Sans MS", cursive;
+    --sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #1d1b19; --panel: #262320; --ink: #eee7dc; --muted: #a39887; --line: #3a3530;
-      --chip: #312d29; --chip-on: #eee7dc; --chip-on-ink: #1d1b19;
-    }
+    :root { --desk: #191c21; --panel: #22262d; --ink: #e8eaed; --muted: #9aa1ad; --line: #333944; --soft: #2a2f37; --pen: #6d93f2; --pen-ink: #0f1420; }
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  /* The story takes all the room it can: the page never scrolls, the side panel scrolls on its own. */
+  html, body { margin: 0; background: var(--desk); color: var(--ink); font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
   body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-  header { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
-  header h1 { font: 700 19px/1.2 "Segoe Print", "Comic Sans MS", "Bradley Hand", cursive; margin: 0; flex: 1 1 260px; }
-  .controls { display: flex; gap: 6px; flex-wrap: wrap; }
-  button { font: inherit; font-size: 14px; color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
-  button:hover { border-color: var(--muted); }
-  button.on, button.primary { background: var(--chip-on); color: var(--chip-on-ink); border-color: var(--chip-on); }
-  button:disabled { opacity: .45; cursor: default; }
-  main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; padding: 12px 16px; }
-  main.focus { grid-template-columns: minmax(0, 1fr); }
-  main.focus aside { display: none; }
-  main > section { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-  #stage { flex: 1; min-height: 0; display: flex; flex-direction: column; border-radius: 14px; box-shadow: 0 2px 14px rgba(0,0,0,.12); overflow: hidden; background: #fffdf6; color: #2f2a26; user-select: none; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { background: transparent; border: 0; border-radius: 8px; padding: 7px 12px; cursor: pointer; color: var(--ink); }
+  button:hover { background: var(--soft); }
+  button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
+  button:disabled { opacity: .35; cursor: default; background: transparent; }
+  button.on { background: var(--soft); color: var(--pen); }
+  button.primary { background: var(--pen); color: var(--pen-ink); }
+  button.primary:hover { filter: brightness(1.08); background: var(--pen); }
+  button.quiet { color: var(--muted); }
+  .icon { width: 36px; height: 36px; padding: 0; display: inline-grid; place-items: center; }
+  .icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* top bar */
+  .bar { flex: none; display: flex; align-items: center; gap: 16px; padding: 10px 20px; }
+  .crumbs { flex: 1; min-width: 0; }
+  #links { display: flex; gap: 14px; font-size: 13px; }
+  #links:empty { display: none; }
+  #links a { color: var(--muted); text-decoration: none; }
+  #links a:hover { color: var(--pen); }
+  h1 { margin: 0; font: 400 22px/1.2 var(--hand); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nav, .actions { display: flex; align-items: center; gap: 2px; }
+  #play { padding: 7px 16px; min-width: 86px; }
+  .more { position: relative; }
+  #moreMenu { position: absolute; right: 0; top: 42px; z-index: 20; min-width: 220px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column; }
+  #moreMenu[hidden] { display: none; }
+  #moreMenu button, #moreMenu a { text-align: left; display: block; padding: 9px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 14px; }
+  #moreMenu a:hover { background: var(--soft); }
+  #moreMenu .keys { padding: 8px 12px 6px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 4px; line-height: 1.8; }
+  kbd { font: 11.5px var(--mono); background: var(--soft); border-radius: 4px; padding: 1px 5px; }
+
+  /* the desk: paper, tool rail, scene track; the side panel slides in only when asked for */
+  main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 0; transition: grid-template-columns .25s ease; padding: 0 20px 14px; }
+  main[data-panel="notes"], main[data-panel="talk"] { grid-template-columns: minmax(0, 1fr) 360px; }
+  .desk { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) auto; column-gap: 10px; min-height: 0; min-width: 0; }
+  #stage { grid-row: 1; grid-column: 1; min-height: 0; display: flex; flex-direction: column; border-radius: 6px; overflow: hidden; background: var(--paper); color: #23262c; box-shadow: var(--shadow); user-select: none; }
   #art { flex: 1; min-height: 180px; position: relative; }
-  /* Step-by-step captions under the drawing: they appear as the pen reaches each part. */
-  #steps { flex: none; max-height: 42%; overflow-y: auto; padding: 12px 26px 16px; border-top: 1.5px dashed #e2d9c4; font: 15.5px/1.5 "Segoe Print", "Comic Sans MS", "Bradley Hand", cursive; color: #3b332c; user-select: text; }
-  #steps[hidden] { display: none; }
-  #steps ol { margin: 0; padding-left: 26px; columns: 2 340px; column-gap: 34px; }
-  #steps li { margin: 0 0 6px; break-inside: avoid; opacity: 0; animation: stepIn .5s ease forwards; }
-  #steps li::marker { color: #d97757; font-weight: 700; }
-  #steps.static li, #steps.static .points { animation: none; opacity: 1; }
-  #steps .points { margin-top: 10px; padding: 10px 14px; background: #fff5d6; border-radius: 10px; opacity: 0; animation: stepIn .6s ease forwards; }
-  #steps .points b { color: #8a3b1f; }
-  #steps .points ul { margin: 4px 0 0; padding-left: 20px; }
-  @keyframes stepIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-  /* What a part does, its file and a bit of its code: opens when a box is picked. */
-  #card { position: absolute; top: 12px; right: 12px; width: min(400px, 62%); max-height: calc(100% - 24px); overflow: auto; background: #fff; color: #2f2a26; border: 1px solid #e2d9c4; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 14px 16px; font-size: 14px; user-select: text; z-index: 3; }
-  #card[hidden] { display: none; }
-  #card.left { right: auto; left: 12px; }
-  #card h3 { margin: 0 26px 4px 0; font: 700 18px/1.25 "Segoe Print", "Comic Sans MS", cursive; }
-  #card .file { font: 12.5px ui-monospace, Consolas, monospace; color: #8a7f6a; margin: 0 0 8px; word-break: break-all; }
-  #card p { margin: 0 0 10px; }
-  #card pre { margin: 0 0 10px; padding: 10px 12px; background: #f6f2e8; border-radius: 8px; font: 12.5px/1.5 ui-monospace, Consolas, monospace; overflow-x: auto; white-space: pre; }
-  #card .x { position: absolute; top: 8px; right: 8px; padding: 2px 9px; background: transparent; border: 0; font-size: 18px; color: #8a7f6a; }
-  #card button { color: #2f2a26; background: #f6f2e8; border-color: #e2d9c4; }
-  #card .row { margin-top: 4px; }
-  #noteForm { position: absolute; z-index: 4; display: none; gap: 6px; padding: 8px; background: #fff; border: 1px solid #e2d9c4; border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.18); width: 280px; }
-  #noteForm input { background: #fffdf6; color: #2f2a26; }
   #svg, #svg svg { display: block; width: 100%; height: 100%; }
-  @media (max-width: 900px) {
-    body { height: auto; overflow: auto; }
-    main, main.focus { grid-template-columns: 1fr; padding: 10px 16px 24px; }
-    #stage { flex: none; height: 62vh; }
-  }
   #ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
   #stage.pen #ink { pointer-events: auto; cursor: crosshair; }
   #stage.picking #art { cursor: pointer; }
-  .dots { flex: none; display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-  .dots button { font-size: 13px; padding: 4px 10px; }
-  aside { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; padding-right: 2px; }
-  @media (max-width: 900px) { aside { overflow: visible; } }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
-  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
-  .tools { display: flex; flex-wrap: wrap; gap: 6px; }
-  .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; min-height: 1.4em; }
+  #hint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); margin: 0; padding: 6px 14px; background: #23262c; color: #fff; border-radius: 999px; font-size: 13px; white-space: nowrap; z-index: 2; pointer-events: none; }
+  #hint:empty { display: none; }
+
+  /* the tool rail: a pencil case clipped to the paper */
+  .rail { grid-row: 1; grid-column: 2; align-self: start; display: flex; flex-direction: column; gap: 2px; padding: 6px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); }
+  #tools { display: flex; flex-direction: column; gap: 2px; }
+  #tools button.on { background: var(--pen); color: var(--pen-ink); }
+  .rail hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+
+  /* scene track: the story is a sequence, so the track is numbered */
+  .track { grid-row: 2; grid-column: 1; display: flex; align-items: center; gap: 14px; padding: 12px 2px 0; min-width: 0; }
+  #dots { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  #dots button { width: 30px; height: 30px; padding: 0; border-radius: 50%; font-size: 12.5px; color: var(--muted); background: var(--panel); box-shadow: inset 0 0 0 1.5px var(--line); }
+  #dots button.past { color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--muted); }
+  #dots button.on { background: var(--pen); color: var(--pen-ink); box-shadow: none; }
+  #dots button.quizdot { width: auto; padding: 0 12px; border-radius: 15px; color: var(--ink); }
+  #dots button.quizdot.on { color: var(--pen-ink); }
+  #sceneName { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* step captions under the drawing, in the narrator's hand */
+  #steps { flex: none; max-height: 34%; overflow-y: auto; padding: 14px 32px 18px; border-top: 1px dashed #dcd6c8; font: 16px/1.55 var(--hand); color: #2d3038; user-select: text; }
+  #steps[hidden] { display: none; }
+  #steps ol { margin: 0; padding-left: 28px; columns: 2 360px; column-gap: 40px; }
+  #steps li { margin: 0 0 6px; break-inside: avoid; opacity: 0; animation: stepIn .5s ease forwards; }
+  #steps li::marker { color: #2f5bd3; font-weight: 700; }
+  #steps.static li, #steps.static .points { animation: none; opacity: 1; }
+  #steps .points { margin-top: 12px; padding: 10px 16px; background: linear-gradient(transparent 0, #fff3a8 0); border-radius: 3px; opacity: 0; animation: stepIn .6s ease forwards; }
+  #steps .points b { font-weight: 700; }
+  #steps .points ul { margin: 4px 0 0; padding-left: 20px; }
+  @keyframes stepIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { #steps li, #steps .points { animation: none; opacity: 1; } main { transition: none; } }
+
+  /* a part's card: what it does, its file, a bit of its code */
+  #card { position: absolute; top: 14px; right: 14px; width: min(400px, 62%); max-height: calc(100% - 28px); overflow: auto; background: #fff; color: #23262c; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,.06), 0 16px 40px rgba(35,38,44,.18); padding: 16px 18px; font: 14px/1.55 var(--sans); user-select: text; z-index: 3; }
+  #card[hidden] { display: none; }
+  #card.left { right: auto; left: 14px; }
+  #card h3 { margin: 0 28px 2px 0; font: 400 20px/1.25 var(--hand); }
+  #card .file { font: 12.5px var(--mono); color: #6b7280; margin: 0 0 10px; word-break: break-all; }
+  #card p { margin: 0 0 10px; }
+  #card pre { margin: 0 0 12px; padding: 12px 14px; background: #f4f5f7; border-radius: 8px; font: 12.5px/1.55 var(--mono); overflow-x: auto; white-space: pre; }
+  #card .x { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; padding: 0; font-size: 18px; color: #6b7280; }
+  #card button { color: #2f5bd3; padding: 6px 10px; }
+  #card button:hover { background: #eef2fc; }
+  #card .row { display: flex; gap: 4px; flex-wrap: wrap; margin-left: -10px; }
+  #noteForm { position: absolute; z-index: 4; display: none; gap: 6px; padding: 8px; background: #fff; border-radius: 12px; box-shadow: 0 12px 32px rgba(35,38,44,.2); width: 290px; }
   #noteForm.show { display: flex; }
-  input[type=text], textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
-  textarea { min-height: 84px; resize: vertical; }
-  ul#said { margin: 0 0 10px; padding-left: 18px; font-size: 14px; }
-  ul#said:empty::before { content: "Nothing drawn on this scene yet."; color: var(--muted); margin-left: -18px; }
-  .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-  details { margin-top: 10px; font-size: 13px; }
-  details pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 260px; overflow: auto; margin: 8px 0 0; }
-  .small { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
-  #subject { font-size: 14px; margin: 0 0 10px; }
-  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--chip-on); color: var(--chip-on-ink); padding: 8px 16px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
-  #toast.show { opacity: 1; }
-  #links { display: flex; gap: 12px; font-size: 14px; }
-  #links a { color: var(--muted); text-decoration: none; }
-  #links a:hover { color: var(--ink); text-decoration: underline; }
-  #learned h3 { font-size: 14px; margin: 0 0 6px; }
-  #learned ul { margin: 0 0 12px; padding-left: 0; list-style: none; }
-  #learned li { padding: 6px 0 6px 24px; position: relative; border-bottom: 1px dashed var(--line); font-size: 14px; }
-  #learned li::before { content: "✓"; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
-  label.small { display: block; margin: 0 0 6px; }
-  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
-  .tabs button { font-size: 13px; padding: 5px 10px; }
-  #live { margin: 0 0 10px; font-size: 13px; }
-  #live.on { color: #3a9d5d; }
-  #live.wait { color: var(--muted); }
-  #thread { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; margin: 0 0 10px; }
+  #noteForm input { flex: 1; border: 1px solid #d9dde3; border-radius: 8px; padding: 7px 10px; background: #fff; color: #23262c; }
+  #noteForm button { background: #2f5bd3; color: #fff; }
+
+  /* the side panel: notes or talk, one at a time */
+  aside { min-height: 0; overflow: hidden; }
+  .sheet { height: 100%; margin-left: 14px; overflow-y: auto; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 18px 20px; }
+  .sheet > section { display: none; }
+  main[data-panel="notes"] .sheet > [data-for="notes"], main[data-panel="talk"] .sheet > [data-for="talk"] { display: block; }
+  .sheet h2 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
+  .sheet h3 { margin: 18px 0 8px; font-size: 14px; font-weight: 600; }
+  .muted { color: var(--muted); font-size: 13.5px; margin: 0 0 12px; }
+  textarea { width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
+  #learned ul { margin: 0 0 4px; padding: 0; list-style: none; }
+  #learned li { padding: 8px 12px; margin-bottom: 6px; background: linear-gradient(transparent 0, color-mix(in srgb, var(--hl) 45%, transparent) 0); border-radius: 4px; font-size: 14px; }
+  #savedInfo { margin-top: 10px; }
+  .tabs { display: flex; gap: 2px; flex-wrap: wrap; margin: 0 0 14px; padding: 3px; background: var(--soft); border-radius: 10px; }
+  .tabs button { flex: 1 1 auto; font-size: 13px; padding: 6px 8px; color: var(--muted); }
+  .tabs button.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  #live { margin: -6px 0 12px; font-size: 13px; color: var(--muted); }
+  #live:empty { display: none; }
+  #live.on { color: var(--ok); }
+  #thread { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; margin: 0 0 14px; }
   #thread:empty { display: none; }
-  .msg { padding: 8px 10px; border-radius: 10px; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
-  .msg b { display: block; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
-  .msg.you { background: var(--bg); border: 1px solid var(--line); margin-left: 24px; }
-  .msg.agent { background: #fff5d6; color: #2f2a26; margin-right: 24px; }
-  .msg.agent b { color: #8a3b1f; }
-  kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .msg { padding: 9px 12px; border-radius: 12px; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+  .msg b { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
+  .msg.you { background: var(--soft); margin-left: 28px; }
+  .msg.agent { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); margin-right: 28px; }
+  #subject { font-size: 14px; margin: 0 0 8px; color: var(--pen); }
+  #subject:empty { display: none; }
+  ul#said { margin: 0 0 12px; padding-left: 18px; font-size: 14px; }
+  ul#said:empty { display: none; }
+  .actions-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .actions-row button:not(.primary) { color: var(--pen); }
+  details { margin-top: 14px; font-size: 13px; color: var(--muted); }
+  details summary { cursor: pointer; }
+  details pre { white-space: pre-wrap; background: var(--soft); border-radius: 8px; padding: 10px; max-height: 260px; overflow: auto; margin: 8px 0 0; font: 12px/1.5 var(--mono); color: var(--ink); }
+
+  /* the quiz takes the caption area under the drawing: tap to answer, nothing to type */
+  #quiz { flex: none; max-height: 56%; overflow-y: auto; padding: 16px 32px 20px; border-top: 1px dashed #dcd6c8; color: #23262c; font: 15px/1.5 var(--sans); user-select: none; }
+  #quiz[hidden] { display: none; }
+  #quiz .qhead { display: flex; align-items: center; gap: 10px; color: #6b7280; font-size: 13px; margin-bottom: 8px; }
+  #quiz .qhead span { flex: 1; }
+  #quiz .qhead button { color: #6b7280; padding: 4px 8px; }
+  #quiz .progress { height: 4px; background: #eceae4; border-radius: 2px; margin-bottom: 14px; overflow: hidden; }
+  #quiz .progress i { display: block; height: 100%; background: #2f5bd3; transition: width .3s ease; }
+  #quiz h3 { font: 400 20px/1.35 var(--hand); margin: 0 0 14px; }
+  #quiz .choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+  #quiz .choices button { color: #23262c; background: #fff; box-shadow: inset 0 0 0 1.5px #dcd6c8; text-align: left; padding: 11px 14px; border-radius: 10px; }
+  #quiz .choices button:hover { box-shadow: inset 0 0 0 1.5px #2f5bd3; background: #fff; }
+  #quiz .choices button b { color: #9aa1ad; font-weight: 600; margin-right: 8px; }
+  #quiz .choices button.right { background: #e7f5ec; box-shadow: inset 0 0 0 2px #2f8f5b; }
+  #quiz .choices button.wrong { background: #fdeaea; box-shadow: inset 0 0 0 2px #e5383b; }
+  #quiz .choices button.picked { background: #fff6c2; box-shadow: inset 0 0 0 1.5px #c9a400; }
+  #quiz .choices button.picked b, #quiz .order button b { color: #2f5bd3; }
+  #quiz .hint { color: #6b7280; font-size: 14px; margin: 10px 0 0; }
+  #quiz .feedback { margin-top: 14px; padding: 12px 16px; border-radius: 10px; font-size: 14.5px; }
+  #quiz .feedback.ok { background: #e7f5ec; }
+  #quiz .feedback.no { background: #fdeaea; }
+  #quiz .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  #quiz .row button { color: #2f5bd3; }
+  #quiz .row button.primary { background: #2f5bd3; color: #fff; }
+  #quiz .score { font: 400 40px/1.1 var(--hand); margin: 0 0 4px; }
+  #quiz .scenes { margin: 12px 0; padding: 0; list-style: none; max-width: 560px; }
+  #quiz .scenes li { display: flex; gap: 12px; align-items: center; padding: 4px 0; }
+  #quiz .scenes li span { flex: 1; }
+  #quiz .scenes li button { color: #2f5bd3; padding: 3px 8px; }
+  #quiz .missed { margin: 8px 0 0; padding-left: 20px; max-width: 720px; }
+  #quiz .missed li { margin-bottom: 10px; }
+  #quiz .missed small { display: block; color: #6b7280; font-size: 13px; }
+
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 8px); background: #23262c; color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 30; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 900px) {
+    body { height: auto; overflow: auto; }
+    .bar { flex-wrap: wrap; padding: 10px 16px; }
+    .crumbs { flex-basis: 100%; }
+    main, main[data-panel="notes"], main[data-panel="talk"] { display: block; padding: 0 16px 24px; }
+    .desk { grid-template-columns: 1fr; }
+    #stage { height: 64vh; }
+    .rail { grid-row: 3; grid-column: 1; flex-direction: row; justify-self: start; margin-top: 10px; }
+    #tools { flex-direction: row; }
+    .rail hr { border-top: 0; border-left: 1px solid var(--line); margin: 6px 4px; }
+    .sheet { margin: 14px 0 0; height: auto; }
+    main:not([data-panel="notes"]):not([data-panel="talk"]) aside { display: none; }
+  }
+  /* ---- sketch layer: everything on the desk looks drawn by hand ---- */
+  :root {
+    --wob1: 255px 14px 225px 14px / 14px 225px 14px 255px;
+    --wob2: 14px 225px 14px 255px / 255px 14px 225px 14px;
+    --wob3: 30px 8px 24px 10px / 8px 26px 10px 30px;
+    --stroke: #23262c; --cast: rgba(35, 38, 44, .9);
+  }
+  @media (prefers-color-scheme: dark) { :root { --stroke: #c9ced8; --cast: rgba(0, 0, 0, .55); } }
+  body { background-color: var(--desk); background-image: radial-gradient(color-mix(in srgb, var(--ink) 14%, transparent) 1px, transparent 1.4px); background-size: 22px 22px; }
+  h1 { font-size: 26px; }
+  .bar button, .tabs button, #dots button, #moreMenu button, #moreMenu a, .actions-row button, #quiz button, #card button, #noteForm button, .sheet h2, .sheet h3, #sceneName, #hint, #toast, #links { font-family: var(--hand); }
+  .bar button { font-size: 15px; }
+  button { border-radius: var(--wob1); }
+  button:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  button.primary, #play { background: var(--hl); color: #23262c; border: 2px solid var(--stroke); box-shadow: 2px 3px 0 var(--cast); border-radius: var(--wob1); }
+  button.primary:hover, #play:hover { background: var(--hl); filter: none; transform: translate(-1px, -1px); box-shadow: 3px 4px 0 var(--cast); }
+  button.on { background: transparent; color: var(--ink); box-shadow: inset 0 -3px 0 var(--hl); border-radius: 2px; }
+
+  /* the paper, taped to the desk */
+  #stage { overflow: visible; border-radius: 3px; box-shadow: 0 1px 0 rgba(0,0,0,.04), 4px 6px 0 rgba(35, 38, 44, .14); position: relative; }
+  #art { overflow: hidden; border-radius: 3px 3px 0 0; }
+  #stage::before, #stage::after { content: ""; position: absolute; top: -11px; width: 92px; height: 24px; background: rgba(240, 226, 170, .78); box-shadow: 0 1px 2px rgba(0,0,0,.08); z-index: 5; pointer-events: none; }
+  #stage::before { left: 34px; transform: rotate(-4deg); }
+  #stage::after { right: 34px; transform: rotate(3deg); }
+
+  /* tool rail, panel, menus: ink outlines with a pencil shadow */
+  .rail, .sheet, #moreMenu { background: var(--panel); border: 2px solid var(--stroke); box-shadow: 3px 4px 0 var(--cast); }
+  .rail { border-radius: var(--wob3); }
+  .sheet { border-radius: 6px 14px 8px 18px / 16px 6px 14px 8px; }
+  #moreMenu { border-radius: var(--wob3); }
+  #tools button.on { background: var(--hl); color: #23262c; box-shadow: none; border-radius: var(--wob1); outline: 2px solid var(--stroke); outline-offset: -2px; }
+  .rail hr { border-top: 2px dashed color-mix(in srgb, var(--ink) 30%, transparent); }
+  .icon svg { stroke-width: 2.1; }
+
+  /* scene track: hand-drawn rings */
+  #dots button { background: var(--panel); box-shadow: none; border: 2px solid color-mix(in srgb, var(--ink) 35%, transparent); border-radius: var(--wob1); font-size: 14px; }
+  #dots button.past { border-color: var(--stroke); }
+  #dots button.on { background: var(--hl); color: #23262c; border-color: var(--stroke); box-shadow: 2px 2px 0 var(--cast); }
+  #dots button.quizdot { border-radius: var(--wob2); }
+  #dots button.quizdot.on { color: #23262c; }
+  #sceneName { font-size: 15px; }
+
+  /* the side panel's pieces */
+  .tabs { background: transparent; padding: 0; gap: 6px; border-bottom: 2px dashed color-mix(in srgb, var(--ink) 25%, transparent); border-radius: 0; padding-bottom: 8px; }
+  .tabs button { flex: 0 0 auto; font-size: 14.5px; }
+  .tabs button.on { background: transparent; box-shadow: inset 0 -4px 0 var(--hl); border-radius: 2px; color: var(--ink); }
+  textarea { border: 2px solid color-mix(in srgb, var(--ink) 30%, transparent); border-radius: var(--wob3); }
+  .msg { border-radius: var(--wob3); }
+  .msg.you { background: color-mix(in srgb, var(--hl) 22%, var(--panel)); }
+  .msg.agent { box-shadow: none; border: 2px solid color-mix(in srgb, var(--ink) 22%, transparent); }
+  .actions-row button:not(.primary) { text-decoration: underline wavy color-mix(in srgb, var(--pen) 50%, transparent); text-underline-offset: 4px; }
+  #hint { background: var(--hl); color: #23262c; border: 2px solid #23262c; border-radius: var(--wob1); box-shadow: 2px 2px 0 rgba(35,38,44,.85); font-size: 14px; }
+  #toast { background: var(--hl); color: #23262c; border: 2px solid #23262c; border-radius: var(--wob1); box-shadow: 3px 3px 0 rgba(35,38,44,.85); }
+
+  /* a part's card and the note box: index cards on the paper */
+  #card { border: 2px solid #23262c; border-radius: var(--wob3); box-shadow: 4px 5px 0 rgba(35,38,44,.85); background: #fffef5; background-image: repeating-linear-gradient(transparent 0 27px, rgba(47,91,211,.10) 27px 28px); }
+  #card pre { background: rgba(255,255,255,.85); border: 1.5px dashed #c9cdd4; }
+  #card button { text-decoration: underline wavy rgba(47,91,211,.45); text-underline-offset: 4px; }
+  #noteForm { border: 2px solid #23262c; border-radius: var(--wob3); box-shadow: 3px 4px 0 rgba(35,38,44,.85); }
+  #noteForm input { border: 2px solid #c9cdd4; border-radius: var(--wob2); font-family: var(--hand); }
+  #noteForm button { background: var(--hl); color: #23262c; border: 2px solid #23262c; }
+
+  /* the quiz: tap the answer you would circle on paper */
+  #quiz .progress { height: 10px; background: transparent; border: 2px solid #23262c; border-radius: var(--wob1); }
+  #quiz .progress i { background: repeating-linear-gradient(-45deg, #23262c 0 2px, transparent 2px 6px); }
+  #quiz .choices button { font-size: 15.5px; background: #fff; box-shadow: none; border: 2px solid #23262c; border-radius: var(--wob1); }
+  #quiz .choices button:nth-child(2n) { border-radius: var(--wob2); }
+  #quiz .choices button:hover { box-shadow: 3px 3px 0 rgba(35,38,44,.85); transform: translate(-1px, -1px); background: #fff; }
+  #quiz .choices button.right { background: #dff3e6; border-color: #2f8f5b; box-shadow: 3px 3px 0 #2f8f5b; }
+  #quiz .choices button.wrong { background: #fde4e4; border-color: #e5383b; text-decoration: line-through; text-decoration-color: #e5383b; }
+  #quiz .choices button.picked { background: var(--hl); border-color: #23262c; }
+  #quiz .feedback { border: 2px dashed currentColor; border-radius: var(--wob3); }
+  #quiz .feedback.ok { color: #1f5f3c; background: #eef8f1; }
+  #quiz .feedback.no { color: #8f1f21; background: #fdf0f0; }
+  #quiz .row button.primary { background: var(--hl); color: #23262c; border: 2px solid #23262c; box-shadow: 2px 3px 0 rgba(35,38,44,.85); }
+  #quiz .score { font-size: 46px; display: inline-block; padding: 0 14px; background: linear-gradient(transparent 55%, var(--hl) 55%); }
+  @media (prefers-reduced-motion: reduce) { button.primary:hover, #play:hover, #quiz .choices button:hover { transform: none; } }
 </style>
 </head>
 <body>
-<header>
-  <h1 id="title"></h1>
-  <nav id="links"></nav>
-  <div class="controls">
-    <button id="prev" title="Previous scene (←)">◀ Prev</button>
-    <button id="play" class="primary" title="Play the story (Space)">▶ Play story</button>
-    <button id="replay" title="Replay this scene (R)">↻ Replay</button>
-    <button id="next" title="Next scene (→)">Next ▶</button>
-    <button id="focus" title="Hide or show the side panel (F)">⤢ Focus</button>
-    <button id="saveCopy" title="Download this story with your drawings and notes">Save my copy</button>
+<header class="bar">
+  <div class="crumbs">
+    <nav id="links"></nav>
+    <h1 id="title"></h1>
+  </div>
+  <div class="nav">
+    <button id="prev" class="icon" title="Previous scene (←)" aria-label="Previous scene"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <button id="play" class="primary" title="Play the whole story (Space)">Play</button>
+    <button id="next" class="icon" title="Next scene (→)" aria-label="Next scene"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    <button id="replay" class="icon" title="Replay this scene (R)" aria-label="Replay this scene"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg></button>
+  </div>
+  <div class="actions">
+    <button id="quizBtn" title="Test yourself on the whole story">Quiz</button>
+    <button id="notesBtn" title="Your notes on this scene (N)">Notes</button>
+    <button id="talkBtn" title="Talk to your agent (T)">Talk</button>
+    <div class="more">
+      <button id="moreBtn" class="icon" aria-label="More" title="More"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg></button>
+      <div id="moreMenu" hidden>
+        <button id="saveCopy">Save my copy (drawings and notes)</button>
+        <button id="png">Save this scene as a picture</button>
+        <button id="focus">Close the side panel</button>
+        <div class="keys"><kbd>←</kbd> <kbd>→</kbd> scenes, <kbd>Space</kbd> play, <kbd>R</kbd> replay<br><kbd>P</kbd> pen, <kbd>Esc</kbd> stop drawing, <kbd>N</kbd> notes, <kbd>T</kbd> talk</div>
+      </div>
+    </div>
   </div>
 </header>
-<main>
-  <section>
+<main data-panel="">
+  <div class="desk">
     <div id="stage">
       <div id="art">
         <div id="svg"></div><canvas id="ink"></canvas>
+        <p id="hint"></p>
         <div id="card" hidden></div>
-        <form id="noteForm"><input type="text" id="noteText" maxlength="80" placeholder="Your note…"><button class="primary">Add</button></form>
+        <form id="noteForm"><input type="text" id="noteText" maxlength="80" placeholder="Your note"><button>Add</button></form>
       </div>
       <div id="steps" hidden></div>
+      <div id="quiz" hidden></div>
     </div>
-    <div class="dots" id="dots"></div>
-  </section>
+    <div class="rail" aria-label="Drawing tools">
+      <div id="tools"></div>
+      <hr>
+      <button id="undo" class="icon" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+      <button id="clear" class="icon" title="Clear this scene's drawing" aria-label="Clear this scene's drawing"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg></button>
+    </div>
+    <div class="track">
+      <div id="dots"></div>
+      <span id="sceneName"></span>
+    </div>
+  </div>
   <aside>
-    <div class="card">
-      <h2>Draw on it</h2>
-      <div class="tools" id="tools"></div>
-      <div class="row">
-        <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
-        <button id="clear">Clear scene</button>
-      </div>
-      <p class="hint" id="hint"></p>
+    <div class="sheet">
+      <section data-for="notes">
+        <h2>Notes</h2>
+        <div id="learned"></div>
+        <h3>In my own words</h3>
+        <textarea id="journal" placeholder="What did this scene teach you?"></textarea>
+        <p class="muted" id="savedInfo"></p>
+      </section>
+      <section data-for="talk">
+        <h2>Talk to your agent</h2>
+        <p id="live"></p>
+        <div id="thread"></div>
+        <div class="tabs" id="talkModes"></div>
+        <p id="subject"></p>
+        <ul id="said"></ul>
+        <textarea id="q" placeholder="Ask about this scene. Your drawing goes with it."></textarea>
+        <div class="actions-row">
+          <button id="sendLive" class="primary" hidden>Send to agent</button>
+          <button id="copy" class="primary">Copy message</button>
+          <button id="zoom" disabled>Ask for a deeper story</button>
+        </div>
+        <details><summary>See the message</summary><pre id="preview"></pre></details>
+        <p class="muted" style="margin-top:12px">Paste it into your agent's chat (Claude Code, Codex, Cursor and others).</p>
+      </section>
     </div>
-    <div class="card">
-      <h2>Notebook</h2>
-      <div id="learned"></div>
-      <label class="small" for="journal">My notes on this scene</label>
-      <textarea id="journal" placeholder="What you learned, in your own words…"></textarea>
-      <p class="small" id="savedInfo"></p>
-    </div>
-    <div class="card">
-      <h2>Talk to your agent</h2>
-      <p id="live"></p>
-      <div id="thread"></div>
-      <div class="tabs" id="talkModes"></div>
-      <p id="subject"></p>
-      <ul id="said"></ul>
-      <textarea id="q" placeholder="Ask about this scene. Your drawing goes with it."></textarea>
-      <div class="row">
-        <button id="sendLive" class="primary" hidden>Send to agent</button>
-        <button id="copy" class="primary">Copy message</button>
-        <button id="png">Save picture</button>
-        <button id="zoom" disabled>Zoom in on…</button>
-      </div>
-      <details><summary>Preview the message</summary><pre id="preview"></pre></details>
-      <p class="small">Paste the message into your agent's chat (Claude Code, Codex, Cursor...). You can attach the picture too.</p>
-    </div>
-    <p class="small"><kbd>←</kbd> <kbd>→</kbd> scenes · <kbd>Space</kbd> play · <kbd>R</kbd> replay · <kbd>P</kbd> pen · <kbd>Esc</kbd> stop drawing · <kbd>F</kbd> focus</p>
   </aside>
 </main>
 <div id="toast"></div>
@@ -202,14 +383,23 @@
   const TALK = [
     ['ask', 'Ask', 'Ask about this scene. Your drawing goes with it.'],
     ['check', 'Check my understanding', 'Explain this scene in your own words. Leave it empty to send your notebook notes.'],
-    ['quiz', 'Quiz me', 'Anything the quiz should focus on? (optional)'],
     ['term', 'Explain a term', "A word or tool you don't know, like API, cron or SQLite. Or pick a box."],
     ['change', 'Propose a change', 'Describe the change you want. Draw it too: + Add box, ✕ Cross out, arrows or pen lines for new connections.'],
   ]
 
   const TOOLS = [
-    ['none', 'Pick'], ['pen', '✎ Pen'], ['circle', '◯ Circle'], ['arrow', '→ Arrow'], ['question', '? Mark'], ['note', '✉ Note'], ['add', '+ Add box'], ['cross', '✕ Cross out'],
+    ['none', 'Pick a part'], ['pen', 'Pen (P)'], ['circle', 'Circle a part'], ['arrow', 'Arrow between parts'], ['question', 'Put a ? on a part'], ['note', 'Stick a note on a part'], ['add', 'Add a new part'], ['cross', 'Cross out a part or an arrow'],
   ]
+  const ICON = {
+    none: '<path d="M6 4l12 7-5.5 1.5L10 18z"/>',
+    pen: '<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/>',
+    circle: '<ellipse cx="12" cy="12" rx="8" ry="6.5"/>',
+    arrow: '<path d="M5 17C9 9 14 7 19 7"/><path d="M15 4l4 3-3 4"/>',
+    question: '<path d="M9 9a3 3 0 1 1 4 2.8c-.8.3-1 1-1 1.7V15"/><path d="M12 19h.01"/>',
+    note: '<path d="M5 4h14v11l-4 5H5z"/><path d="M15 20v-5h4"/>',
+    add: '<rect x="4" y="6" width="16" height="12" rx="2" stroke-dasharray="3 2.4"/><path d="M12 9v6M9 12h6"/>',
+    cross: '<path d="M6 6l12 12M18 6L6 18"/>',
+  }
   const HINTS = {
     none: () => 'Click a box to ask about it. Pick a tool to draw.',
     pen: () => 'Draw anywhere: loop around boxes, draw lines between them, scribble on one.',
@@ -240,6 +430,7 @@
     el.removeAttribute('width'); el.removeAttribute('height')
     try { el.setCurrentTime(0) } catch {}
     freshMark = null
+    $('quiz').hidden = true
     renderSteps(animate)
     sizeInk()
     ui()
@@ -275,6 +466,224 @@
     }
   }
 
+  // ---- quiz: built from the doodle itself, plus the agent's own questions ----
+  let quiz = null
+  const QKEY = 'doodle-quiz:' + story.id
+  const shuffle = list => {
+    const a = list.slice()
+    for (let k = a.length - 1; k > 0; k--) {
+      const j = Math.floor(Math.random() * (k + 1))
+      ;[a[k], a[j]] = [a[j], a[k]]
+    }
+    return a
+  }
+  // a caption with the part's own name taken out, so the question does not give it away
+  const blankOut = (text, label) => {
+    let t = text
+    for (const v of new Set([label, label.replace(/\(\)$/, ''), label.split('/').pop()])) if (v.length > 2) t = t.split(v).join('____')
+    return t
+  }
+  function autoQuestions(sc, si) {
+    const out = []
+    const label = id => (sc.nodes.find(x => x.id === id) || {}).label || id
+    const allLabels = [...new Set(story.scenes.flatMap(x => x.nodes.map(nd => nd.label)))]
+    // click the part
+    for (const nd of sc.nodes.filter(x => x.step)) {
+      const clue = blankOut(nd.step, nd.label)
+      if (clue.length > 24 && clue !== nd.step) {
+        const wrong = shuffle(sc.nodes.filter(x => x.id !== nd.id).map(x => x.label)).slice(0, 3)
+        const choices = shuffle([nd.label, ...wrong])
+        out.push({ type: 'click', s: si, q: `Which part does this? "${clue}"`, answer: nd.id, choices, answerK: choices.indexOf(nd.label), correct: nd.label, why: nd.details || nd.step })
+      }
+    }
+    // what comes next
+    for (const e of sc.edges) {
+      const outs = sc.edges.filter(x => x.from === e.from)
+      if (outs.length > 1 && !e.label) continue
+      const wrong = shuffle(sc.nodes.filter(x => x.id !== e.to && x.id !== e.from).map(x => x.label)).slice(0, 3)
+      if (wrong.length < 2) continue
+      const right = label(e.to)
+      const choices = shuffle([right, ...wrong])
+      out.push({
+        type: 'choice', s: si,
+        q: outs.length > 1 ? `At "${label(e.from)}", when the answer is "${e.label}", where does it go next?` : `What comes right after "${label(e.from)}"?`,
+        choices, answer: choices.indexOf(right), correct: right,
+        why: (sc.nodes.find(x => x.id === e.to) || {}).step || '',
+      })
+    }
+    // put the steps in order
+    const tl = timeline(sc)
+    const steps = sc.nodes.map((nd, k) => ({ nd, t: tl.nodes[k].t })).filter(x => x.nd.step).sort((a, b) => a.t - b.t).slice(0, 5)
+    if (steps.length >= 3) out.push({ type: 'order', s: si, q: 'Put these steps in the order they happen.', items: steps.map(x => blankOut(x.nd.step, '')), correct: 'the order shown in the scene', why: '' })
+    // name the hidden part
+    if (sc.nodes.length >= 3) {
+      const nd = shuffle(sc.nodes)[0]
+      const others = shuffle(allLabels.filter(l => !sc.nodes.some(x => x.label === l)))
+      const wrong = (others.length >= 3 ? others : shuffle(sc.nodes.filter(x => x.id !== nd.id).map(x => x.label))).slice(0, 3)
+      if (wrong.length >= 2) {
+        const choices = shuffle([nd.label, ...wrong])
+        out.push({ type: 'hidden', s: si, node: nd.id, q: 'One part is hidden behind the "?". Which one is it?', choices, answer: choices.indexOf(nd.label), correct: nd.label, why: nd.step || nd.details || '' })
+      }
+    }
+    return shuffle(out)
+  }
+  function buildQuiz() {
+    const qs = []
+    story.scenes.forEach((sc, si) => {
+      const own = (sc.quiz || []).map(q => ({ type: 'choice', s: si, q: q.q, choices: q.choices, answer: q.answer, correct: q.choices[q.answer], why: q.why }))
+      const auto = autoQuestions(sc, si)
+      // about three per scene: the agent's "why" questions first, then quick ones from the drawing
+      qs.push(...own.slice(0, 3), ...auto.slice(0, Math.max(1, 3 - own.length)))
+    })
+    return qs
+  }
+  function startQuiz(again) {
+    clearTimeout(timer)
+    playing = false
+    mode = 'none'
+    pending = null
+    $('card').hidden = true
+    const qs = again === 'missed' ? quiz.results.filter(r => !r.ok).map(r => r.q) : buildQuiz()
+    if (!qs.length) { toast('This story is too small for a quiz yet.'); return }
+    quiz = { qs, k: 0, results: [], phase: 'ask', picked: [], back: i }
+    showQuestion()
+  }
+  function endQuiz(toStory) {
+    const back = quiz ? quiz.back : i
+    quiz = null
+    $('quiz').hidden = true
+    if (toStory) go(back)
+  }
+  function showQuestion(withMark) {
+    const q = quiz.qs[quiz.k]
+    i = q.s
+    run++
+    const sc = q.type === 'hidden'
+      ? { ...scene(), nodes: scene().nodes.map(nd => (nd.id === q.node ? { ...nd, label: '?', note: undefined, step: undefined } : nd)) }
+      : scene()
+    const marks = withMark ? [{ s: i, kind: 'circle', a: withMark }] : []
+    $('svg').innerHTML = renderScene(sc, { index: i, total: n, run, animate: false, marks, fresh: withMark ? 0 : -1 })
+    const el = $('svg').querySelector('svg')
+    el.removeAttribute('width'); el.removeAttribute('height')
+    $('steps').hidden = true
+    $('quiz').hidden = false
+    renderQuiz()
+    sizeInk()
+    ui()
+  }
+  function answer(ok, mine) {
+    const q = quiz.qs[quiz.k]
+    quiz.results.push({ q, ok, mine })
+    quiz.phase = 'answered'
+    if (q.type === 'click' || q.type === 'hidden') showQuestion(q.type === 'click' ? q.answer : null)
+    else renderQuiz()
+  }
+  function next() {
+    if (quiz.k < quiz.qs.length - 1) {
+      quiz.k++
+      quiz.phase = 'ask'
+      quiz.picked = []
+      showQuestion()
+    } else {
+      quiz.phase = 'done'
+      const score = quiz.results.filter(r => r.ok).length
+      try {
+        const old = JSON.parse(localStorage.getItem(QKEY) || '{}')
+        localStorage.setItem(QKEY, JSON.stringify({ best: Math.max(old.best || 0, score), of: quiz.results.length, last: score, at: Date.now() }))
+      } catch {}
+      renderQuiz()
+    }
+  }
+  function renderQuiz() {
+    const box = $('quiz')
+    const q = quiz.qs[quiz.k]
+    const total = quiz.qs.length
+    const head = `<div class="qhead"><span>${quiz.phase === 'done' ? 'Quiz finished' : `Question ${quiz.k + 1} of ${total}, from scene ${q.s + 1}: ${escText(story.scenes[q.s].title)}`}</span><button class="exit">Back to the story</button></div>`
+      + `<div class="progress"><i style="width:${Math.round(((quiz.k + (quiz.phase === 'ask' ? 0 : 1)) / total) * 100)}%"></i></div>`
+    if (quiz.phase === 'done') {
+      const score = quiz.results.filter(r => r.ok).length
+      const per = story.scenes.map((sc, si) => ({ sc, si, rs: quiz.results.filter(r => r.q.s === si) })).filter(x => x.rs.length)
+      const missed = quiz.results.filter(r => !r.ok)
+      let best = 0
+      try { best = JSON.parse(localStorage.getItem(QKEY) || '{}').best || 0 } catch {}
+      box.innerHTML = head
+        + `<p class="score">${score} / ${total}</p><p>${score === total ? 'Perfect. You know this story.' : score >= total * 0.7 ? 'Nice. A few to look at again.' : 'Good start. The scenes below are worth another look.'}${best > score ? ` Your best: ${best}.` : ''}</p>`
+        + '<ul class="scenes">' + per.map(x => {
+          const ok = x.rs.filter(r => r.ok).length
+          return `<li><span>${x.si + 1}. ${escText(x.sc.title)}</span><b>${ok}/${x.rs.length}</b><button data-scene="${x.si}">Review</button></li>`
+        }).join('') + '</ul>'
+        + (missed.length ? '<b>What you missed</b><ol class="missed">' + missed.map(r =>
+          `<li>${escText(r.q.q)}<small>The answer: ${escText(r.q.correct)}${r.mine ? ` (you said: ${escText(r.mine)})` : ''}${r.q.why ? `. ${escText(r.q.why)}` : ''}</small></li>`).join('') + '</ol>' : '')
+        + `<div class="row">${missed.length ? '<button class="primary again-missed">Retry the ones I missed</button>' : ''}<button class="again">New quiz</button>${missed.length ? '<button class="send">Ask the agent about my misses</button>' : ''}</div>`
+      box.querySelector('.exit').onclick = () => endQuiz(true)
+      box.querySelectorAll('[data-scene]').forEach(b => (b.onclick = () => { endQuiz(); go(Number(b.dataset.scene)) }))
+      const am = box.querySelector('.again-missed')
+      if (am) am.onclick = () => startQuiz('missed')
+      box.querySelector('.again').onclick = () => startQuiz()
+      const send = box.querySelector('.send')
+      if (send) send.onclick = () => deliver(missesMessage(), `Quiz: ${score} of ${total}. Please explain what I missed.`)
+      return
+    }
+    let body = `<h3>${escText(q.q)}</h3>`
+    const done = quiz.phase === 'answered'
+    const result = done ? quiz.results[quiz.results.length - 1] : null
+    const rightK = q.type === 'click' ? q.answerK : q.answer
+    if (q.type === 'choice' || q.type === 'hidden' || q.type === 'click') {
+      body += '<div class="choices">' + q.choices.map((c, k) => {
+        const cls = done ? (k === rightK ? 'right' : result && result.mine === c ? 'wrong' : '') : ''
+        return `<button class="${cls}" data-k="${k}"><b>${k + 1}</b>${escText(c)}</button>`
+      }).join('') + '</div>'
+      if (q.type === 'click' && !done) body += '<p class="hint">Tap an answer, or click the part on the drawing.</p>'
+    } else if (q.type === 'order') {
+      if (!quiz.shuffled || quiz.shuffledFor !== quiz.k) {
+        quiz.shuffled = shuffle(q.items.map((t, k) => ({ t, k })))
+        quiz.shuffledFor = quiz.k
+      }
+      body += '<div class="choices order">' + quiz.shuffled.map(it => {
+        const at = quiz.picked.indexOf(it.k)
+        const cls = done ? (at === it.k ? 'right' : 'wrong') : at >= 0 ? 'picked' : ''
+        return `<button class="${cls}" data-item="${it.k}"><b>${at >= 0 ? at + 1 : '·'}</b>${escText(it.t)}</button>`
+      }).join('') + '</div>'
+      if (!done) body += '<p class="hint">Tap the steps in the order they happen.' + (quiz.picked.length ? ' <button class="reset">Start over</button>' : '') + '</p>'
+    }
+    if (done) {
+      body += `<div class="feedback ${result.ok ? 'ok' : 'no'}">${result.ok ? '✓ Right.' : `✗ Not quite. The answer: <b>${escText(q.correct)}</b>.`}${q.why ? ` ${escText(q.why)}` : ''}</div>`
+        + `<div class="row"><button class="primary next">${quiz.k < total - 1 ? 'Next question' : 'See my results'}</button></div>`
+    }
+    box.innerHTML = head + body
+    box.querySelector('.exit').onclick = () => endQuiz(true)
+    box.querySelectorAll('[data-k]').forEach(b => (b.onclick = () => {
+      if (quiz.phase !== 'ask') return
+      const k = Number(b.dataset.k)
+      answer(k === rightK, q.choices[k])
+    }))
+    box.querySelectorAll('[data-item]').forEach(b => (b.onclick = () => {
+      if (quiz.phase !== 'ask') return
+      const k = Number(b.dataset.item)
+      if (quiz.picked.includes(k)) return
+      quiz.picked.push(k)
+      if (quiz.picked.length === q.items.length) answer(quiz.picked.every((v, at) => v === at), 'a different order')
+      else renderQuiz()
+    }))
+    const reset = box.querySelector('.reset')
+    if (reset) reset.onclick = () => { quiz.picked = []; renderQuiz() }
+    const nx = box.querySelector('.next')
+    if (nx) nx.onclick = next
+  }
+  function missesMessage() {
+    const missed = quiz.results.filter(r => !r.ok)
+    const score = quiz.results.length - missed.length
+    return [
+      `[doodle] Quiz results for your doodle story "${story.title}": ${score} of ${quiz.results.length}.${SOURCE ? ` (story file: ${SOURCE})` : ''}`,
+      '',
+      'I missed:',
+      ...missed.map(r => `- Scene ${r.q.s + 1} "${story.scenes[r.q.s].title}": ${r.q.q} I said "${r.mine}"; the answer is "${r.q.correct}".`),
+      '',
+      'Please explain each one in plain words, using the parts of the story, and add a short note to those scenes so I can review them later.',
+    ].join('\n')
+  }
+  $('quizBtn').onclick = () => (quiz ? endQuiz(true) : startQuiz())
+
   // ---- what a part does ----
   function openCard(id, side) {
     const nd = scene().nodes.find(x => x.id === id)
@@ -295,8 +704,7 @@
       else if (b.dataset.act === 'zoom') $('zoom').click()
       else {
         talk = b.dataset.act === 'term' ? 'term' : 'ask'
-        document.querySelector('main').classList.remove('focus')
-        $('focus').classList.remove('on')
+        openPanel('talk')
         ui()
         $('q').focus()
       }
@@ -307,25 +715,39 @@
     $('title').textContent = story.title
     $('prev').disabled = i === 0
     $('next').disabled = i === n - 1
-    $('play').textContent = playing ? '❚❚ Pause' : '▶ Play story'
+    $('play').textContent = playing ? 'Pause' : 'Play'
     for (const b of ['prev', 'play', 'next']) $(b).style.display = n > 1 ? '' : 'none'
     $('dots').innerHTML = ''
     if (n > 1) story.scenes.forEach((s, k) => {
       const b = document.createElement('button')
-      b.textContent = `${k + 1}. ${s.title}`
-      if (k === i) b.className = 'on'
+      b.textContent = String(k + 1)
+      b.title = s.title
+      b.setAttribute('aria-label', `Scene ${k + 1}: ${s.title}`)
+      b.className = k === i && !quiz ? 'on' : k < i ? 'past' : ''
       b.onclick = () => go(k)
       $('dots').append(b)
     })
+    {
+      const b = document.createElement('button')
+      b.textContent = 'Quiz'
+      b.className = 'quizdot' + (quiz ? ' on' : '')
+      b.onclick = () => startQuiz()
+      $('dots').append(b)
+    }
+    $('sceneName').textContent = quiz ? 'Quiz on the whole story' : n > 1 ? `Scene ${i + 1} of ${n}: ${scene().title}` : scene().title
+    $('quizBtn').classList.toggle('on', !!quiz)
     $('tools').innerHTML = ''
     for (const [m, label] of TOOLS) {
       const b = document.createElement('button')
-      b.textContent = label
-      if (mode === m) b.className = 'on'
+      b.innerHTML = `<svg viewBox="0 0 24 24">${ICON[m]}</svg>`
+      b.title = label
+      b.setAttribute('aria-label', label)
+      b.className = 'icon' + (mode === m ? ' on' : '')
       b.onclick = () => setMode(m)
       $('tools').append(b)
     }
-    $('hint').textContent = HINTS[mode]()
+    $('hint').textContent = mode === 'none' || quiz ? '' : HINTS[mode]()
+    document.querySelector('.rail').style.visibility = quiz ? 'hidden' : ''
     $('stage').className = mode === 'pen' ? 'pen' : 'picking'
     $('noteForm').className = ((mode === 'note' || mode === 'add') && pending) || pendingNew ? 'show' : ''
     $('subject').textContent = subject ? `Asking about: ${name(subject)}` : ''
@@ -362,11 +784,12 @@
     $('copy').textContent = { quiz: 'Copy quiz request', check: 'Copy for checking', change: 'Copy change prompt', term: 'Copy explain request' }[talk] || 'Copy message'
     const nd = subject && scene().nodes.find(x => x.id === subject)
     $('zoom').disabled = !nd
-    $('zoom').textContent = !nd ? 'Zoom in on…' : nd.zoom && KNOWN[nd.zoom] ? `Open deeper story: ${KNOWN[nd.zoom].title}` : `Ask for a deeper story on ${nd.label}`
+    $('zoom').textContent = !nd ? 'Pick a part to go deeper' : nd.zoom && KNOWN[nd.zoom] ? `Open deeper story: ${KNOWN[nd.zoom].title}` : `Ask for a deeper story on ${nd.label}`
     $('preview').textContent = message()
   }
 
   function go(k, animate = true) {
+    if (quiz) endQuiz()
     i = Math.max(0, Math.min(n - 1, k))
     $('journal').value = journal[i] || ''
     run++
@@ -399,7 +822,7 @@
     clearTimeout(timer)
     if (!playing) return
     timer = setTimeout(() => {
-      if (i >= n - 1) { playing = false; ui(); return }
+      if (i >= n - 1) { playing = false; ui(); toast('That is the whole story. Ready for the quiz? Press ★ Quiz.'); return }
       go(i + 1)
       schedule()
     }, sceneMs(scene()) + 1500)
@@ -451,6 +874,14 @@
   }
 
   $('art').addEventListener('click', ev => {
+    if (quiz) {
+      const q = quiz.qs[quiz.k]
+      if (quiz.phase === 'ask' && q && q.type === 'click') {
+        const hit = nodeAt(toScene(ev))
+        if (hit) answer(hit.id === q.answer, hit.label || hit.id)
+      }
+      return
+    }
     if (mode === 'pen' || ev.target.closest('#card, #noteForm')) return
     const p = toScene(ev)
     if (mode === 'add') {
@@ -809,12 +1240,22 @@
   }
 
   // ---- buttons and keys ----
-  const toggleFocus = () => {
-    document.querySelector('main').classList.toggle('focus')
-    $('focus').classList.toggle('on')
-    requestAnimationFrame(sizeInk)
+  let panel = ''
+  function openPanel(p) {
+    panel = p
+    document.querySelector('main').dataset.panel = p
+    $('notesBtn').classList.toggle('on', p === 'notes')
+    $('talkBtn').classList.toggle('on', p === 'talk')
+    setTimeout(sizeInk, 280)
   }
-  $('focus').onclick = toggleFocus
+  const togglePanel = p => openPanel(panel === p ? '' : p)
+  $('notesBtn').onclick = () => togglePanel('notes')
+  $('talkBtn').onclick = () => togglePanel('talk')
+  $('focus').onclick = () => { openPanel(''); $('moreMenu').hidden = true }
+  $('moreBtn').onclick = ev => { ev.stopPropagation(); $('moreMenu').hidden = !$('moreMenu').hidden }
+  document.addEventListener('click', ev => { if (!ev.target.closest('.more')) $('moreMenu').hidden = true })
+  $('saveCopy').addEventListener('click', () => { $('moreMenu').hidden = true })
+  $('png').addEventListener('click', () => { $('moreMenu').hidden = true })
   $('prev').onclick = () => go(i - 1)
   $('next').onclick = () => go(i + 1)
   $('play').onclick = togglePlay
@@ -832,14 +1273,19 @@
     else if (ev.key === ' ' && !ev.target.closest('button')) { ev.preventDefault(); togglePlay() }
     else if (ev.key === 'r' || ev.key === 'R') go(i)
     else if (ev.key === 'p' || ev.key === 'P') setMode('pen')
+    else if (quiz && /^[1-6]$/.test(ev.key) && quiz.phase === 'ask') { const b = document.querySelectorAll('#quiz .choices button')[Number(ev.key) - 1]; if (b) b.click() }
+    else if (quiz && ev.key === 'Enter') { const b = document.querySelector('#quiz .next'); if (b) b.click() }
+    else if (quiz && ev.key === 'Escape') endQuiz(true)
     else if (ev.key === 'Escape') setMode('none')
-    else if (ev.key === 'f' || ev.key === 'F') toggleFocus()
+    else if (ev.key === 'n' || ev.key === 'N') togglePanel('notes')
+    else if (ev.key === 't' || ev.key === 'T') togglePanel('talk')
   })
 
   // #scene=3 opens a scene directly, #focus opens without the side panel: handy for sharing a link.
   const hp = new URLSearchParams(location.hash.slice(1))
   if (hp.get('scene')) i = Math.max(0, Math.min(n - 1, Number(hp.get('scene')) - 1 || 0))
-  if (hp.has('focus')) { document.querySelector('main').classList.add('focus'); $('focus').classList.add('on') }
+  if (hp.get('panel') === 'notes' || hp.get('panel') === 'talk') openPanel(hp.get('panel'))
+  else if (hp.has('talk')) openPanel('talk')
   if (TALK.some(t => t[0] === hp.get('talk'))) talk = hp.get('talk')
   $('journal').value = journal[i] || ''
   draw(true)
@@ -851,6 +1297,7 @@
     ui()
   }
   if (hp.has('preview')) document.querySelector('details').open = true
+  if (hp.has('quiz')) startQuiz()
   connect()
 })()
 </script>

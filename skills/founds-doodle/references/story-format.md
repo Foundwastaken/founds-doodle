@@ -34,6 +34,9 @@ One JSON object. The script (`scripts/doodle.mjs`) validates it, drops what it c
       ],
       "zones": [{ "label": "Server", "nodes": ["node id"] }],   // up to 8 dashed areas
       "points": ["1-3 Remember lines shown after the scene"],
+      "quiz": [                               // 2-3 "why" questions for the end-of-story quiz
+        { "q": "Why does Snip ask Redis first?", "choices": ["It answers from memory", "Postgres is read-only", "Redis makes the codes"], "answer": 0, "why": "Redis is a fast copy; Postgres is the source of truth." }
+      ],
       "notes": ["what the user and the agent settled, one short line each (up to 12)"]
     }
   ]
@@ -56,6 +59,7 @@ The reader's drawings and own notes live in their browser, keyed by the story `i
 - **cycle**: nodes on a ring, in the order given.
 - Nodes appear one by one in story order (layer, then position in the list), each edge drawing itself in just before the node it points to.
 - `rich` adds numbered step badges and a few sparkles.
+- The **quiz** (★ Quiz, at the end of the story) mixes the scene's `quiz` questions with questions made from the drawing: which part does this, what comes next, put the steps in order, name the hidden part. Every answer is a tap; nothing is typed.
 - Each node's and edge's `step` appears under the drawing, numbered, as the pen reaches that part; `points` appear last in a Remember box. Clicking a part opens its `details`, `file` and `code`.
 
 ## Tips for good stories

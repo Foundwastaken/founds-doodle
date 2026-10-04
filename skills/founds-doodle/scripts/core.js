@@ -59,6 +59,14 @@ function parseScene(j, style) {
         caption: j.narration || j.caption ? clip(String(j.narration ?? j.caption), 230) : undefined,
         notes: Array.isArray(j.notes) ? j.notes.slice(0, 50).map(x => clip(String(x), 280)).filter(Boolean) : [],
         points: Array.isArray(j.points) ? j.points.slice(0, 10).map(x => clip(String(x), 160)).filter(Boolean) : [],
+        quiz: Array.isArray(j.quiz)
+            ? j.quiz.slice(0, 10).map(q => ({
+                q: clip(String(q?.q ?? ''), 240),
+                choices: (Array.isArray(q?.choices) ? q.choices : []).slice(0, 6).map(c => clip(String(c), 120)),
+                answer: Number(q?.answer),
+                why: q?.why ? clip(String(q.why), 400) : '',
+            })).filter(q => q.q && q.choices.length >= 2 && Number.isInteger(q.answer) && q.answer >= 0 && q.answer < q.choices.length)
+            : [],
         zones: Array.isArray(j.zones)
             ? j.zones.slice(0, 8).map(z => ({ label: clip(String(z?.label ?? ''), 30), nodes: (Array.isArray(z?.nodes) ? z.nodes : []).map(String).filter(id => seen.has(id)) })).filter(z => z.nodes.length)
             : [],
@@ -595,7 +603,7 @@ export function renderScene(spec, o) {
     // title with a pen underline
     const tw = Math.min(W - 60, spec.title.length * 13);
     parts.push(`<g opacity="0">${fade(0, 0.5)}<text x="${W / 2}" y="40" text-anchor="middle" font-size="24" font-weight="bold" fill="${INK}">${esc(spec.title)}</text></g>`);
-    parts.push(drawIn(rl(W / 2 - tw / 2, 50, W / 2 + tw / 2, 51, rng, 2.5), 0.2, 0.5, `stroke="#d97757" stroke-width="3" stroke-linecap="round"`));
+    parts.push(drawIn(rl(W / 2 - tw / 2, 50, W / 2 + tw / 2, 51, rng, 2.5), 0.2, 0.5, `stroke="#2f5bd3" stroke-width="3" stroke-linecap="round"`));
     const bend = spec.layout === 'cycle' ? 0.18 : 0.1;
     const geo = { pos, drawn, idx, W, H, bend };
     const boxAt = (i) => ({ x: pos[i].x, y: pos[i].y, hw: drawn[i].hw, hh: drawn[i].hh });
@@ -610,7 +618,7 @@ export function renderScene(spec, o) {
         const y1 = Math.max(...ids.map(i => pos[i].y + Math.max(drawn[i].hh, spec.nodes[i].note ? drawn[i].noteY + 8 : 0))) + 12;
         const tint = ['#f3ead7', '#e3eef6', '#e5f2e1', '#f6e3ea', '#efe6f7', '#e2f1f0', '#f7ecd9', '#e9edf2'][k % 8];
         const d = [rl(x0, y0, x1, y0, rng, 2), rl(x1, y0, x1, y1, rng, 2), rl(x1, y1, x0, y1, rng, 2), rl(x0, y1, x0, y0, rng, 2)].join(' ');
-        parts.push(`<g opacity="0">${fade(0.3, 0.6)}<rect x="${f(x0)}" y="${f(y0)}" width="${f(x1 - x0)}" height="${f(y1 - y0)}" rx="16" fill="${tint}" opacity="0.6"/><path d="${d}" fill="none" stroke="#b9ae98" stroke-width="1.6" stroke-dasharray="6 6" stroke-linecap="round"/><text x="${f(x0 + 12)}" y="${f(y0 + 17)}" font-size="12.5" font-weight="bold" fill="#8a7f6a" letter-spacing="1">${esc(z.label.toUpperCase())}</text></g>`);
+        parts.push(`<g opacity="0">${fade(0.3, 0.6)}<rect x="${f(x0)}" y="${f(y0)}" width="${f(x1 - x0)}" height="${f(y1 - y0)}" rx="16" fill="${tint}" opacity="0.6"/><path d="${d}" fill="none" stroke="#b9ae98" stroke-width="1.6" stroke-dasharray="6 6" stroke-linecap="round"/><text x="${f(x0 + 12)}" y="${f(y0 + 17)}" font-size="13.5" fill="#7a7466">${esc(z.label)}</text></g>`);
     });
     // edges (under the nodes)
     spec.edges.forEach(e => {
@@ -622,7 +630,7 @@ export function renderScene(spec, o) {
         parts.push(drawIn(l.d, begin, 0.5, `stroke="${INK}" stroke-width="2.4" stroke-linecap="round"`));
         parts.push(`<path d="${l.head}" fill="none" stroke="${INK}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" opacity="0">${fade(begin + 0.45, 0.15)}</path>`);
         if (e.label) {
-            parts.push(`<text x="${f(l.mid.x)}" y="${f(l.mid.y - 8)}" text-anchor="middle" font-size="13" fill="#b0482a" stroke="${PAPER}" stroke-width="5" paint-order="stroke" stroke-linejoin="round" opacity="0">${fade(begin + 0.35)}${esc(e.label)}</text>`);
+            parts.push(`<text x="${f(l.mid.x)}" y="${f(l.mid.y - 8)}" text-anchor="middle" font-size="13" fill="#2f5bd3" stroke="${PAPER}" stroke-width="5" paint-order="stroke" stroke-linejoin="round" opacity="0">${fade(begin + 0.35)}${esc(e.label)}</text>`);
         }
     });
     // nodes
@@ -637,7 +645,7 @@ export function renderScene(spec, o) {
             drawIn(dr.d, t0, 0.7, `stroke="${INK}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"`) +
             drawIn(second, t0 + 0.1, 0.7, `stroke="${INK}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"`) +
             (spec.style === 'rich'
-                ? `<g opacity="0">${fade(t0 + 0.3, 0.3)}<circle cx="${f(-dr.hw + 4)}" cy="${f(-dr.hh + 4)}" r="11" fill="#d97757" stroke="${INK}" stroke-width="1.6"/><text x="${f(-dr.hw + 4)}" y="${f(-dr.hh + 9)}" text-anchor="middle" font-size="13" font-weight="bold" fill="#fff">${rank[i] + 1}</text></g>`
+                ? `<g opacity="0">${fade(t0 + 0.3, 0.3)}<circle cx="${f(-dr.hw + 4)}" cy="${f(-dr.hh + 4)}" r="11" fill="#2f5bd3" stroke="${INK}" stroke-width="1.6"/><text x="${f(-dr.hw + 4)}" y="${f(-dr.hh + 9)}" text-anchor="middle" font-size="13" font-weight="bold" fill="#fff">${rank[i] + 1}</text></g>`
                 : '') +
             `<g opacity="0">${fade(t0 + 0.45)}${textLines(dr.label, dr.labelY, 15, INK, 'font-weight="bold"')}${noteLines.length ? textLines(noteLines, dr.noteY, 11.5, '#6b6258', 'font-style="italic"') : ''}${nd.zoom ? `<g transform="translate(${f(dr.hw - 2)} ${f(dr.labelY > 40 ? -dr.hh + 18 : dr.hh - 2)})"><title>A deeper story: ${esc(nd.zoom)}</title><circle r="10" fill="#fff" stroke="${INK}" stroke-width="1.6" stroke-dasharray="3 2"/><path d="M-4 0 H4 M0 -4 V4" stroke="${INK}" stroke-width="2" stroke-linecap="round"/></g>` : ''}</g>` +
             `</g>`);
@@ -649,7 +657,7 @@ export function renderScene(spec, o) {
     }
     // the narrator, storybook style, speaking as the scene starts
     if (cap.length) {
-        parts.push(`<g transform="translate(${W / 2} ${H - capH + 26})" opacity="0">${fade(0.35, 0.6)}${textLines(cap, 0, 14, '#8a3b1f', 'font-style="italic"')}</g>`);
+        parts.push(`<g transform="translate(${W / 2} ${H - capH + 26})" opacity="0">${fade(0.35, 0.6)}${textLines(cap, 0, 14.5, '#4a5060', 'font-style="italic"')}</g>`);
     }
     const body = o.animate ? parts.join('') : staticize(parts.join(''));
     const marks = marksLayer(geo, o.marks, o.fresh);

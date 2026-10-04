@@ -2,7 +2,7 @@
 
 **A doodle way of learning.** Your codebase, told as an animated, hand-drawn storybook that you and your AI agent learn from together.
 
-Founds Doodle is an agent skill for **Claude Code**, **Codex**, **Cursor**, **Antigravity** and any agent that reads `SKILL.md`. Ask your agent to explain a project, a flow or an idea. It reads the code and writes a short story in scenes, following one "hero" (a request, a file, a job) through your code. The story opens as a page where you can **play it, draw on it, take notes, get quizzed, ask what a word means, and even sketch the change you want made**.
+Founds Doodle is an agent skill for **Claude Code**, **Codex**, **Cursor**, **Antigravity** and any agent that reads `SKILL.md`. Ask your agent to explain a project, a flow or an idea. It reads the code and writes a short story in scenes, following one "hero" (a request, a file, a job) through your code. The story opens as a sketchbook page where you can **play it, draw on it, take notes, take a quiz, ask what a word means, and even sketch the change you want made**.
 
 ![The Founds Doodle player](assets/player.png)
 
@@ -19,7 +19,8 @@ Reading an unfamiliar codebase is slow, and a wall of text in chat is easy to no
 1. **See it**: a story in scenes, from the big picture down to a single function.
 2. **Draw on it**: circle what confuses you, draw where you think data goes, cross out what you'd remove.
 3. **Talk it through**: your drawing becomes a precise message to your agent. It answers, corrects you (or admits you're right), quizzes you, and explains words you don't know.
-4. **Keep it**: what you settle together is written into the story as notes, so you can review it later or share it with your team.
+4. **Test it**: a quick tap-to-answer quiz at the end shows what stuck and what didn't.
+5. **Keep it**: what you settle together is written into the story as notes, so you can review it later or share it with your team.
 
 ## A tour
 
@@ -67,7 +68,13 @@ Parts with a ⊕ have a deeper story. Here, how `makeCode()` guarantees that no 
 
 ![Zooming in](docs/7-zoom.png)
 
-### 8. A library to come back to
+### 8. A quiz at the end
+
+**★ Quiz** tests you on the whole story, and every answer is a tap. It mixes questions made from the drawing (which part does this, what comes next, put the steps in order, name the hidden part) with "why" questions the agent wrote into each scene. You get a score per scene, the reasons behind what you missed, **Retry the ones I missed**, and **Ask the agent about my misses**.
+
+![The quiz](docs/9-quiz.png)
+
+### 9. A library to come back to
 
 Every story lives in `.doodle/` in your project with an `index.html` library. Deeper stories and concept stories nest under the story they came from.
 
@@ -84,13 +91,12 @@ Every story lives in `.doodle/` in your project with an `index.html` library. De
 | Part story | "zoom into X" | a new story about X, linked from its parent |
 | Function level | "step by step", "what exactly happens in f()" | one scene per function or branch, with real checks, data and error paths |
 
-## Talk to your agent, five ways
+## Talk to your agent
 
 | Mode | What happens |
 | --- | --- |
 | **Ask** | Ask about the scene. Your drawing goes with the question. |
 | **Check my understanding** | Explain the scene in your own words. The agent says what's right, corrects what's wrong, and fills in what you missed. |
-| **Quiz me** | The agent asks you three questions, one at a time, and may ask you to *draw* an answer. |
 | **Explain a term** | "What is an API?" The agent makes a concept story that ends inside your story. |
 | **Propose a change** | Draw the design you want and get a ready-made change prompt (see the tour). |
 
