@@ -10,9 +10,15 @@
 //        Puts the agent's answer in the page's chat thread.
 //
 // The conversation is kept in <dir>/talk.jsonl; the running server's port in <dir>/.server.json.
+//
+// Safety: the server only listens on 127.0.0.1, only answers requests addressed to
+// 127.0.0.1/localhost (no DNS rebinding), turns away requests made by other websites,
+// only serves the built story pages, and the agent's side (next, reply) needs the
+// secret key from .server.json, which pages never see.
 import http from 'node:http'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, statSync, mkdirSync, unlinkSync, watch } from 'node:fs'
-import { join, resolve, extname, basename, sep } from 'node:path'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, unlinkSync, watch } from 'node:fs'
+import { join, resolve, basename } from 'node:path'
 
 const DEFAULT_PORT = 7311
 const WITH_VALUE = new Set(['--port', '--open', '--dir', '--file', '--story', '--scene', '--timeout'])
@@ -23,14 +29,14 @@ const val = (argv, name) => {
 const positional = argv => argv.filter((a, k) => !a.startsWith('--') && !WITH_VALUE.has(argv[k - 1]))
 const defaultDir = () => resolve(existsSync('.doodle') ? '.doodle' : '.')
 
-function portFor(argv) {
-  if (val(argv, '--port')) return Number(val(argv, '--port'))
+// the running server's port and the agent's key, from <dir>/.server.json
+function serverFor(argv) {
   const dir = val(argv, '--dir') ? resolve(val(argv, '--dir')) : defaultDir()
+  let info = {}
   try {
-    return JSON.parse(readFileSync(join(dir, '.server.json'), 'utf8')).port
-  } catch {
-    return DEFAULT_PORT
-  }
+    info = JSON.parse(readFileSync(join(dir, '.server.json'), 'utf8'))
+  } catch {}
+  return { port: Number(val(argv, '--port')) || info.port || DEFAULT_PORT, key: info.key || '' }
 }
 
 export async function run(command, argv, helpers) {
@@ -83,13 +89,34 @@ async function serve(argv, { library, openUrl }) {
       })
     })
 
+  const key = randomBytes(24).toString('hex')
+  const isAgent = req => {
+    const got = Buffer.from(String(req.headers['x-doodle-key'] || ''))
+    const want = Buffer.from(key)
+    return got.length === want.length && timingSafeEqual(got, want)
+  }
+  let port = 0
+  // only this computer's own pages: the Host must be ours, and a browser request must come from our origin
+  const fromUs = req => {
+    const ours = [`127.0.0.1:${port}`, `localhost:${port}`]
+    if (!ours.includes(String(req.headers.host || '').toLowerCase())) return false
+    const origin = req.headers.origin
+    if (origin && !ours.some(h => origin.toLowerCase() === `http://${h}`)) return false
+    const site = req.headers['sec-fetch-site']
+    if (site && site !== 'same-origin' && site !== 'none') return false
+    return true
+  }
+
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1')
     const json = (code, data) => {
       if (res.writableEnded) return
-      res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+      res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' })
       res.end(JSON.stringify(data))
     }
+    if (!fromUs(req)) return json(403, { error: 'only pages served by this doodle server can talk to it' })
+    if (req.method === 'POST' && !String(req.headers['content-type'] || '').startsWith('application/json')) return json(415, { error: 'send JSON' })
+    if ((url.pathname === '/api/next' || url.pathname === '/api/reply') && !isAgent(req)) return json(403, { error: 'agent key needed' })
     try {
       if (url.pathname === '/api/ping') return json(200, { ok: true, ...state() })
       if (url.pathname === '/api/thread') {
@@ -162,14 +189,20 @@ async function serve(argv, { library, openUrl }) {
         status()
         return json(200, { ok: true })
       }
-      // the library itself: only files inside the folder, never dotfiles
-      let p = decodeURIComponent(url.pathname)
+      // the library itself: only the built story pages and the index, nothing else in the folder
+      let p = url.pathname
       if (p === '/') p = '/index.html'
-      const file = resolve(dir, '.' + p)
-      if (!file.startsWith(dir + sep) || basename(file).startsWith('.')) return json(404, { error: 'not found' })
-      if (!existsSync(file) || statSync(file).isDirectory()) return json(404, { error: 'not found' })
-      const type = { '.html': 'text/html; charset=utf-8', '.json': 'application/json', '.jsonl': 'text/plain; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml' }[extname(file)] || 'application/octet-stream'
-      res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store' })
+      const name = p.slice(1)
+      const pages = new Set(['index.html', ...stories.map(s => `${s.story.id}.html`)])
+      const file = join(dir, name)
+      if (!pages.has(name) || !existsSync(file)) return json(404, { error: 'not found' })
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff',
+        'x-frame-options': 'DENY',
+        'content-security-policy': "frame-ancestors 'none'",
+      })
       res.end(readFileSync(file))
     } catch (e) {
       json(500, { error: String(e.message || e) })
@@ -177,7 +210,7 @@ async function serve(argv, { library, openUrl }) {
   })
 
   const want = Number(val(argv, '--port')) || DEFAULT_PORT
-  const port = await new Promise((ok, no) => {
+  port = await new Promise((ok, no) => {
     let p = want
     const attempt = () => {
       server.once('error', e => {
@@ -191,7 +224,7 @@ async function serve(argv, { library, openUrl }) {
     attempt()
   })
   const info = join(dir, '.server.json')
-  writeFileSync(info, JSON.stringify({ port, pid: process.pid }))
+  writeFileSync(info, JSON.stringify({ port, pid: process.pid, key }), { mode: 0o600 })
   const stop = () => {
     try {
       unlinkSync(info)
@@ -230,17 +263,17 @@ async function serve(argv, { library, openUrl }) {
   const base = `http://127.0.0.1:${port}`
   console.log(`doodle: live at ${base}/  (this computer only; stop with Ctrl+C)`)
   const first = val(argv, '--open')
-  if (first !== undefined) openUrl(first && first !== 'index' ? `${base}/${first}.html` : `${base}/`)
+  if (first !== undefined) openUrl(first && first !== 'index' ? `${base}/${encodeURIComponent(first)}.html` : `${base}/`)
 }
 
 // ---------------------------------------------------------------- listen
 async function listen(argv) {
-  const port = portFor(argv)
+  const { port, key } = serverFor(argv)
   const until = val(argv, '--timeout') ? Date.now() + Number(val(argv, '--timeout')) * 60000 : Infinity
   while (Date.now() < until) {
     let res
     try {
-      res = await fetch(`http://127.0.0.1:${port}/api/next`)
+      res = await fetch(`http://127.0.0.1:${port}/api/next`, { headers: { 'x-doodle-key': key } })
     } catch {
       // a long wait can time out on the client side; only give up if the server is gone
       try {
@@ -256,6 +289,10 @@ async function listen(argv) {
       console.log(item.text)
       return
     }
+    if (res.status === 403) {
+      console.error('doodle: the server refused (wrong or missing key). Run listen from the folder the server was started for, or pass --dir.')
+      process.exit(3)
+    }
   }
   console.log('doodle: no message yet.')
   process.exit(4)
@@ -269,11 +306,11 @@ async function reply(argv) {
     console.error('doodle: nothing to send. Use: node doodle.mjs reply "your answer"  (or --file answer.md, or pipe it in)')
     process.exit(2)
   }
-  const port = portFor(argv)
+  const { port, key } = serverFor(argv)
   try {
     const res = await fetch(`http://127.0.0.1:${port}/api/reply`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-doodle-key': key },
       body: JSON.stringify({ text, story: val(argv, '--story'), scene: val(argv, '--scene') }),
     })
     console.log(res.ok ? 'doodle: reply shown on the page.' : `doodle: the server refused the reply (${res.status}).`)

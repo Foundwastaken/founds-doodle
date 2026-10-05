@@ -129,8 +129,9 @@ function open(target) {
 }
 
 function openUrl(url) {
+  // never through cmd.exe: a path with & or | in it would run as a command
   const [cmd, cmdArgs] =
-    process.platform === 'win32' ? ['cmd', ['/c', 'start', '""', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]]
+    process.platform === 'win32' ? ['rundll32', ['url.dll,FileProtocolHandler', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]]
   try {
     spawn(cmd, cmdArgs, { detached: true, stdio: 'ignore' }).unref()
   } catch {
